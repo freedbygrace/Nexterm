@@ -58,5 +58,19 @@ specific protocol, pass it in the `type` field of `POST /api/connections` (`ssh`
 `ftp`, `ftps`, or `web` for the remote browser); omitting `type` uses the primary protocol. Requests for a protocol that
 is not enabled on the entry are rejected.
 
+### Folders from scripts
+
+Instead of looking up a `folderId`, pass `folderPath` when creating or updating an entry:
+
+```json
+{ "name": "build-box", "type": "server", "folderPath": "Prod/Web/EU", "config": { "...": "..." } }
+```
+
+Each level is matched case-insensitively among the existing folders of the same scope (your personal
+list, or the organization given by `organizationId` / an explicit `folderId` to start from) and is only created when
+missing, so running the same import twice never produces duplicate folders. An array of names works as well
+(`["Prod", "Web", "EU"]`) if a folder name contains a slash. `PUT /api/folders` follows the same rule and returns the
+existing folder when a sibling with the same name already exists.
+
 Existing entries are migrated automatically: each one gets a map containing its previous protocol (plus SFTP for SSH
 entries), so nothing changes until you enable more.

@@ -2,11 +2,14 @@ const Identity = require('../models/Identity');
 const EntryIdentity = require('../models/EntryIdentity');
 const { listIdentities } = require('../controllers/identity');
 
-const CREDENTIALLESS_PROTOCOLS = ['telnet', 'demo'];
+const { CREDENTIALLESS_PROTOCOLS, getPrimaryProtocol } = require('./entryProtocols');
 
-const resolveIdentity = async (entry, identityId, directIdentity = null, accountId = null) => {
-    const protocol = entry.type === 'server' ? entry.config?.protocol : entry.type;
-    const requiresIdentity = !entry.type?.startsWith('pve-') && !CREDENTIALLESS_PROTOCOLS.includes(protocol);
+/**
+ * @param {string|null} protocol - the protocol the session will use; defaults to the entry's primary protocol.
+ */
+const resolveIdentity = async (entry, identityId, directIdentity = null, accountId = null, protocol = null) => {
+    const effectiveProtocol = protocol || getPrimaryProtocol(entry);
+    const requiresIdentity = !entry.type?.startsWith('pve-') && !CREDENTIALLESS_PROTOCOLS.has(effectiveProtocol);
 
     if (directIdentity) {
         return {

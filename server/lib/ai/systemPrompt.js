@@ -18,7 +18,8 @@ Guidelines:
 const buildServerContext = async (entry) => {
     const parts = [];
     if (entry?.name) parts.push(`name: ${entry.name}`);
-    const protocol = entry?.type === "server" ? entry?.config?.protocol : entry?.type;
+    // The assistant always operates over SSH; report the entry type for non-server entries only.
+    const protocol = entry?.type === "server" ? "ssh" : entry?.type;
     if (protocol) parts.push(`protocol: ${protocol}`);
     if (entry?.config?.ip) parts.push(`host: ${entry.config.ip}`);
 

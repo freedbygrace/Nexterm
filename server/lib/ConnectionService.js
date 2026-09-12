@@ -15,6 +15,7 @@ const controlPlane = require("./controlPlane/ControlPlaneServer");
 const { isRecordingEnabled } = require("../utils/recordingService");
 const EngineSftpClient = require("./EngineSftpClient");
 const { buildPveQemuParams, buildRdpParams, buildVncParams, buildWebParams, buildDemoParams } = require("./guacParamBuilders");
+const { getPrimaryProtocol, getProtocolPort, DEFAULT_PORTS, FILE_PROTOCOLS } = require("../utils/entryProtocols");
 
 const GUAC_PROTOCOLS = {
     rdp: { sessionType: SessionType.RDP, defaultPort: 3389 },
@@ -93,14 +94,21 @@ const extractIdentity = (identityResult) => {
     return identityResult?.identity === undefined ? identityResult : identityResult.identity;
 };
 
-const FILE_TRANSFER_PORTS = { sftp: 22, ftp: 21, ftps: 21 };
+const getEntryProtocol = (entry) => getPrimaryProtocol(entry);
 
-const getEntryProtocol = (entry) => (entry.type === "server" ? entry.config?.protocol : entry.type);
+/** Protocol a session runs over: the resolved per-session protocol, falling back to the entry's primary. */
+const getSessionProtocol = (session, entry) => session?.configuration?.protocol || getPrimaryProtocol(entry);
 
-const getHostPort = (entry, defaultPort = 22) => {
+/**
+ * Host and port for `protocol` on the entry. Each enabled protocol carries its own port
+ * (see utils/entryProtocols); `defaultPort` is only used when the entry has no port at all.
+ */
+const getHostPort = (entry, protocol = "ssh", defaultPort = null) => {
     const host = entry.config?.ip;
-    const port = entry.config?.port || defaultPort;
     if (!host) throw new Error("Missing host configuration");
+    const port = entry.type === "server" || !entry.type
+        ? getProtocolPort(entry, protocol)
+        : (entry.config?.port || defaultPort || DEFAULT_PORTS[protocol] || 22);
     return { host, port };
 };
 
@@ -114,7 +122,7 @@ const resolveJumpHosts = async (entry) => {
         if (!jhEntry) throw new Error(`Jump host entry ${jumpHostId} not found`);
 
         const { host, port } = getHostPort(jhEntry);
-        const identityResult = await resolveIdentity(jhEntry, null, null, null);
+        const identityResult = await resolveIdentity(jhEntry, null, null, null, "ssh");
         const identity = extractIdentity(identityResult);
         if (!identity) throw new Error(`No identity found for jump host ${jumpHostId}`);
 
@@ -149,12 +157,12 @@ const createConnectionForSession = async (sessionId, accountId) => {
     if (!entry) throw new Error("Entry not found");
 
     const { type, identityId, directIdentity, scriptId } = session.configuration;
-    if (type === "sftp") return { success: true, skipped: true };
+    const protocol = getSessionProtocol(session, entry);
+    if (type === "sftp" || FILE_PROTOCOLS.has(protocol)) return { success: true, skipped: true };
 
-    const identityResult = await resolveIdentity(entry, identityId, directIdentity, accountId);
+    const identityResult = await resolveIdentity(entry, identityId, directIdentity, accountId, protocol);
     const identity = extractIdentity(identityResult);
     const organizationId = entry.organizationId || null;
-    const protocol = getEntryProtocol(entry);
 
     let script = null;
     if (scriptId) {
@@ -163,7 +171,7 @@ const createConnectionForSession = async (sessionId, accountId) => {
         if (!script) throw new Error("Script not found");
     }
 
-    if (type === "web") return prepareWebSession(sessionId, entry, identity, organizationId);
+    if (type === "web" || protocol === "web") return prepareWebSession(sessionId, entry, identity, organizationId);
 
     switch (protocol) {
         case "ssh": return createSSHConnectionForSession(sessionId, entry, identity, organizationId, script);
@@ -181,14 +189,16 @@ const createConnectionForSession = async (sessionId, accountId) => {
     }
 };
 
-const resolveFileTransferContext = async (entry, identityId, directIdentity, accountId) => {
-    const identityResult = await resolveIdentity(entry, identityId, directIdentity, accountId);
+const resolveFileTransferContext = async (entry, identityId, directIdentity, accountId, sessionProtocol = null) => {
+    // A file session on a multi-protocol entry may use SFTP even when the primary protocol is SSH/RDP.
+    let protocol = sessionProtocol && FILE_PROTOCOLS.has(sessionProtocol) ? sessionProtocol : getEntryProtocol(entry);
+    if (!FILE_PROTOCOLS.has(protocol)) protocol = "sftp";
+    const identityResult = await resolveIdentity(entry, identityId, directIdentity, accountId, protocol);
     const identity = extractIdentity(identityResult);
     const credentials = await resolveCredentials(identity);
-    const protocol = getEntryProtocol(entry);
-    const { host, port } = getHostPort(entry, FILE_TRANSFER_PORTS[protocol] ?? 22);
+    const { host, port } = getHostPort(entry, protocol);
     const params = buildSSHParams(identity, credentials);
-    if (protocol) params.protocol = protocol;
+    params.protocol = protocol;
     return { identity, credentials, host, port, params };
 };
 
@@ -199,8 +209,8 @@ const createSFTPConnectionForSession = async (sessionId, entry, accountId) => {
 
     session._connecting = (async () => {
         requireEngine();
-        const { identityId, directIdentity } = session.configuration;
-        const { host, port, params } = await resolveFileTransferContext(entry, identityId, directIdentity, accountId);
+        const { identityId, directIdentity, protocol: sessionProtocol } = session.configuration;
+        const { host, port, params } = await resolveFileTransferContext(entry, identityId, directIdentity, accountId, sessionProtocol);
         const jumpHosts = await resolveJumpHosts(entry);
 
         const dataSocket = await openEngineSession(
@@ -244,8 +254,8 @@ const getAuxiliarySFTPClient = async (sessionId, entry, accountId, opts) => {
 
     conn[connectingKey] = (async () => {
         requireEngine();
-        const { identityId, directIdentity } = session.configuration;
-        const { host, port, params } = await resolveFileTransferContext(entry, identityId, directIdentity, accountId);
+        const { identityId, directIdentity, protocol: sessionProtocol } = session.configuration;
+        const { host, port, params } = await resolveFileTransferContext(entry, identityId, directIdentity, accountId, sessionProtocol);
         const jumpHosts = await resolveJumpHosts(entry);
 
         conn._auxGeneration = (conn._auxGeneration || 0) + 1;
@@ -356,9 +366,7 @@ const createSSHConnectionForSession = async (sessionId, entry, identity, organiz
 const createTelnetConnectionForSession = async (sessionId, entry, identity, organizationId) => {
     requireEngine();
     const session = requireSession(sessionId);
-    const { ip, port = 23 } = entry.config || {};
-
-    if (!ip) throw new Error("Missing host configuration");
+    const { host: ip, port } = getHostPort(entry, "telnet");
 
     const credentials = identity ? await resolveCredentials(identity) : {};
     const params = buildTelnetParams(identity, credentials, entry.config);
@@ -526,7 +534,7 @@ const prepareWebSession = async (sessionId, entry, identity, organizationId) => 
 const prepareGuacamoleSession = async (sessionId, entry, identity, organizationId) => {
     const session = requireSession(sessionId);
     requireEngine();
-    const protocol = entry.type === "server" ? entry.config?.protocol : entry.type;
+    const protocol = getSessionProtocol(session, entry);
     const cfg = entry.config || {};
 
     let params;
@@ -540,6 +548,11 @@ const prepareGuacamoleSession = async (sessionId, entry, identity, organizationI
         params = await buildDemoParams();
     } else {
         throw new Error(`Unsupported protocol: ${protocol}`);
+    }
+
+    // Multi-protocol entries carry one port per protocol; the builders only know the legacy `config.port`.
+    if (entry.type === "server" && (protocol === "rdp" || protocol === "vnc")) {
+        params.port = String(getProtocolPort(entry, protocol));
     }
 
     const { sessionType, defaultPort } = GUAC_PROTOCOLS[protocol] ?? GUAC_PROTOCOLS.vnc;

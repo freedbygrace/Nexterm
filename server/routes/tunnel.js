@@ -7,6 +7,7 @@ const controlPlane = require("../lib/controlPlane/ControlPlaneServer");
 const { buildSSHParams, resolveJumpHosts } = require("../lib/ConnectionService");
 const { hasResourcePermission } = require("../utils/permission");
 const { Permission } = require("../permissions/registry");
+const { isProtocolEnabled } = require("../utils/entryProtocols");
 
 module.exports = async (ws, req) => {
     const context = await wsAuth(ws, req);
@@ -26,7 +27,7 @@ module.exports = async (ws, req) => {
         return;
     }
 
-    const isSSH = entry.type === "ssh" || (entry.type === "server" && entry.config?.protocol === "ssh");
+    const isSSH = entry.type === "ssh" || (entry.type === "server" && isProtocolEnabled(entry, "ssh"));
     if (!isSSH) {
         ws.close(4002, "Port forwarding is only supported for SSH servers");
         return;

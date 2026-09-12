@@ -151,7 +151,7 @@ module.exports = async (ws, req) => {
         }
     }
 
-    const result = await resolveIdentity(entry, identityId, directIdentity, user.id);
+    const result = await resolveIdentity(entry, identityId, directIdentity, user.id, serverSession?.configuration?.protocol || null);
     const identity = result?.identity !== undefined ? result.identity : result;
 
     if (result.accessDenied) {

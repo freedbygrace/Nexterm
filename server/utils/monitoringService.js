@@ -1,4 +1,5 @@
 const logger = require("./logger");
+const { isProtocolEnabled } = require("./entryProtocols");
 const Entry = require("../models/Entry");
 const EntryIdentity = require("../models/EntryIdentity");
 const MonitoringData = require("../models/MonitoringData");
@@ -43,7 +44,7 @@ const runMonitoring = async () => {
         }
 
         const entries = await Entry.findAll({ where: { type: "server" } });
-        const toMonitor = entries.filter(e => e.config?.protocol === "ssh" && e.config?.monitoringEnabled);
+        const toMonitor = entries.filter(e => isProtocolEnabled(e, "ssh") && e.config?.monitoringEnabled);
         if (toMonitor.length) await Promise.allSettled(toMonitor.map(monitorEntry));
     } catch (error) {
         logger.error("Error running monitoring", { error: error.message });

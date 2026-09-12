@@ -8,6 +8,7 @@ const { validateEntryAccess } = require("./entry");
 const { getIdentityCredentials, getIdentity } = require("./identity");
 const { getOrganizationAuditSettingsInternal, createAuditLog, AUDIT_ACTIONS, RESOURCE_TYPES } = require("./audit");
 const { resolveIdentity } = require("../utils/identityResolver");
+const { resolveSessionProtocol, getRendererForProtocol, getPrimaryProtocol } = require("../utils/entryProtocols");
 const { Permission } = require("../permissions/registry");
 const Organization = require('../models/Organization');
 const logger = require("../utils/logger");
@@ -43,28 +44,33 @@ const ENTRY_TYPE_TO_CONNECT_PERMISSION = {
     'ftps': Permission.FILES_VIEW,
 };
 
-const getAuditAction = (entry, type, scriptId) => {
+const getAuditAction = (protocol, scriptId) => {
     if (scriptId) return AUDIT_ACTIONS.SCRIPT_EXECUTE;
-    if (type === "web") return AUDIT_ACTIONS.WEB_CONNECT;
-    const entryType = entry.type === 'server' ? entry.config?.protocol : entry.type;
-    return ENTRY_TYPE_TO_AUDIT_ACTION[entryType] || AUDIT_ACTIONS.SSH_CONNECT;
+    return ENTRY_TYPE_TO_AUDIT_ACTION[protocol] || AUDIT_ACTIONS.SSH_CONNECT;
 };
 
-const getRequiredConnectPermission = (entry, type, scriptId) => {
+const getRequiredConnectPermission = (protocol, scriptId) => {
     if (scriptId) return Permission.SCRIPTS_EXECUTE;
-    if (type === "sftp") return Permission.FILES_VIEW;
-    if (type === "web") return Permission.CONNECT_WEB;
-    const entryType = entry.type === 'server' ? entry.config?.protocol : entry.type;
-    return ENTRY_TYPE_TO_CONNECT_PERMISSION[entryType] || Permission.CONNECT_SSH;
+    return ENTRY_TYPE_TO_CONNECT_PERMISSION[protocol] || Permission.CONNECT_SSH;
 };
 
+/**
+ * @param {string|null} type - which protocol to open on the entry ("ssh", "rdp", "sftp", ..., or "web").
+ *                             `null` selects the entry's primary protocol. Scripts always run over SSH.
+ */
 const createSession = async (accountId, entryId, identityId, connectionReason, type = null, directIdentity = null, tabId = null, browserId = null, scriptId = null, startPath = null, ipAddress = null, userAgent = null) => {
     const entry = await Entry.findByPk(entryId);
     if (!entry) {
         return { code: 404, message: "Entry not found" };
     }
 
-    const requiredPermission = getRequiredConnectPermission(entry, type, scriptId);
+    const resolved = resolveSessionProtocol(entry, scriptId ? "ssh" : type);
+    if (resolved.error) {
+        return { code: 400, message: resolved.error };
+    }
+    const protocol = resolved.protocol;
+
+    const requiredPermission = getRequiredConnectPermission(protocol, scriptId);
     const accessResult = await validateEntryAccess(accountId, entry, "Access denied", requiredPermission);
     if (!accessResult.valid) {
         return { code: 403, message: "Access denied" };
@@ -81,7 +87,7 @@ const createSession = async (accountId, entryId, identityId, connectionReason, t
         }
     }
 
-    const result = await resolveIdentity(entry, identityId, directIdentity, accountId);
+    const result = await resolveIdentity(entry, identityId, directIdentity, accountId, protocol);
     const identity = result?.identity !== undefined ? result.identity : result;
 
     if (result.accessDenied) {
@@ -95,7 +101,7 @@ const createSession = async (accountId, entryId, identityId, connectionReason, t
     const auditLogId = await createAuditLog({
         accountId,
         organizationId: entry.organizationId,
-        action: getAuditAction(entry, type, scriptId),
+        action: getAuditAction(protocol, scriptId),
         resource: scriptId ? RESOURCE_TYPES.SCRIPT : RESOURCE_TYPES.ENTRY,
         resourceId: scriptId || entry.id,
         details: { connectionReason, ...(scriptId && { serverId: entry.id }) },
@@ -103,11 +109,14 @@ const createSession = async (accountId, entryId, identityId, connectionReason, t
         userAgent,
     });
 
-    const renderer = type === "sftp" || type === "web" ? type : entry.renderer;
+    const renderer = getRendererForProtocol(protocol) || entry.renderer;
 
     const configuration = {
         identityId: identity ? identity.id : null,
+        // `type` keeps its historical meaning for the client (renderer override: "sftp" / "web"),
+        // `protocol` is the resolved protocol this session runs over.
         type: type || null,
+        protocol,
         directIdentity: directIdentity || null,
         scriptId: scriptId || null,
         startPath: startPath || null,
@@ -314,8 +323,8 @@ const getSession = async (accountId, sessionId) => {
         name: entry.name,
         type: entry.type,
         icon: entry.icon,
-        renderer: entry.renderer,
-        protocol: entry.config?.protocol,
+        renderer: session.configuration.renderer || entry.renderer,
+        protocol: session.configuration.protocol || getPrimaryProtocol(entry),
     };
 
     return {

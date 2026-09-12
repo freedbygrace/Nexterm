@@ -4,6 +4,7 @@ const pveLxcHook = require("../hooks/pve-lxc");
 const telnetHook = require("../hooks/telnet");
 const logger = require("../utils/logger");
 const SessionManager = require("../lib/SessionManager");
+const { getPrimaryProtocol } = require("../utils/entryProtocols");
 
 const waitForConnection = async (sessionId, timeoutMs = 30000) => {
     const start = Date.now();
@@ -22,7 +23,7 @@ module.exports = async (ws, req) => {
     if (!context) return;
 
     const { entry, serverSession } = context;
-    const protocol = entry.type === "server" ? entry.config?.protocol : entry.type;
+    const protocol = serverSession?.configuration?.protocol || getPrimaryProtocol(entry);
 
     if (context.isShared) {
         if (protocol === "ssh") return sshHook(ws, context);

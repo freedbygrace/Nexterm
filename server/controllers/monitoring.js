@@ -7,6 +7,7 @@ const Integration = require("../models/Integration");
 const { Op } = require("sequelize");
 const { validateEntryAccess } = require("./entry");
 const { validateIntegrationAccess } = require("./integration");
+const { isProtocolEnabled } = require("../utils/entryProtocols");
 
 const TIME_RANGES = { "1h": { ms: 3600000, points: 60 }, "6h": { ms: 21600000, points: 360 }, "24h": { ms: 86400000, points: 720 } };
 
@@ -78,7 +79,7 @@ module.exports.getAllServersMonitoring = async (accountId) => {
     try {
         const entries = await Entry.findAll({ where: { type: "server" } });
         const accessChecks = await Promise.all(entries.map(e => validateEntryAccess(accountId, e).then(r => ({ item: e, valid: r.valid }))));
-        const accessibleEntries = accessChecks.filter(({ item, valid }) => valid && item.config?.monitoringEnabled && item.config?.protocol === "ssh").map(({ item }) => item);
+        const accessibleEntries = accessChecks.filter(({ item, valid }) => valid && item.config?.monitoringEnabled && isProtocolEnabled(item, "ssh")).map(({ item }) => item);
 
         const integrations = await Integration.findAll({ where: { type: "proxmox" } });
         const intAccessChecks = await Promise.all(integrations.map(i => validateIntegrationAccess(accountId, i).then(r => ({ item: i, valid: r.valid }))));

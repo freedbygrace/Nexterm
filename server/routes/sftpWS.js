@@ -12,6 +12,7 @@ const { hasResourcePermission } = require("../utils/permission");
 const { Permission } = require("../permissions/registry");
 const Entry = require("../models/Entry");
 const logger = require("../utils/logger");
+const { getPrimaryProtocol, isProtocolEnabled } = require("../utils/entryProtocols");
 
 const OP = {
     READY: 0x0, LIST_FILES: 0x1, CREATE_FILE: 0x4, CREATE_FOLDER: 0x5, DELETE_FILE: 0x6,
@@ -43,13 +44,15 @@ const requirePaths = (p) => { if (!p?.path || !p?.newPath) throw new Error("Inva
 const requireMultiPaths = (p) => { if (!p?.sources?.length || !p?.destination) throw new Error("Invalid paths"); };
 
 const SHELL_LESS_PROTOCOLS = new Set(["ftp", "ftps"]);
-const TERMINAL_LESS_PROTOCOLS = new Set(["sftp", "ftp", "ftps"]);
 
-const getCapabilities = (entry) => {
-    const protocol = entry.type === "server" ? entry.config?.protocol : entry.type;
+const getCapabilities = (entry, serverSession = null) => {
+    const protocol = serverSession?.configuration?.protocol || getPrimaryProtocol(entry);
     return {
+        // Shell-backed operations (copy, checksum, ...) need an SSH-backed file session.
         shell: !SHELL_LESS_PROTOCOLS.has(protocol),
-        terminal: !TERMINAL_LESS_PROTOCOLS.has(protocol),
+        // "Open terminal here" is available whenever the entry exposes SSH, regardless of which
+        // file protocol this session uses.
+        terminal: entry.type === "server" ? isProtocolEnabled(entry, "ssh") : !SHELL_LESS_PROTOCOLS.has(protocol) && protocol !== "sftp",
     };
 };
 
@@ -212,7 +215,7 @@ module.exports = async (ws, req) => {
         };
         sftpClient.on("close", onSftpClose);
 
-        const capabilities = getCapabilities(entry);
+        const capabilities = getCapabilities(entry, SessionManager.get(sessionId));
         const storedPath = SessionManager.getSftpPath(sessionId);
         sendResult(ws, OP.READY, { path: storedPath, capabilities });
 

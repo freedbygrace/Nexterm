@@ -27,7 +27,8 @@ const buildContext = async (entry, shell) => {
     const parts = [];
     if (shell) parts.push(`shell: ${shell}`);
 
-    const protocol = entry?.type === "server" ? entry?.config?.protocol : entry?.type;
+    // Command generation targets the terminal session, which for server entries is SSH.
+    const protocol = entry?.type === "server" ? "ssh" : entry?.type;
     if (protocol) parts.push(`protocol: ${protocol}`);
 
     try {

@@ -7,11 +7,14 @@ const stateBroadcaster = require("../lib/StateBroadcaster");
 const { ACCOUNT_VIEW_ATTRIBUTES, toAccountView } = require("../utils/accountView");
 const { Permission } = require("../permissions/registry");
 const { hasOrganizationPermission } = require("../utils/permission");
+const { getPrimaryProtocol, FILE_PROTOCOLS } = require("../utils/entryProtocols");
 
 const isSharingEnabled = (organization) => organization?.sessionSettings?.enableLiveSessionSharing === true;
 
 const isJoinableSession = (session) =>
-    session.configuration?.type !== "sftp" && !session.configuration?.scriptId;
+    session.configuration?.type !== "sftp"
+    && !FILE_PROTOCOLS.has(session.configuration?.protocol)
+    && !session.configuration?.scriptId;
 
 const getSharingOrganizations = async (accountId) => {
     const memberships = await OrganizationMember.findAll({ where: { accountId, status: "active" } });
@@ -36,7 +39,7 @@ const serializeSession = (session, entry, owner, organization, writable) => ({
     organizationName: organization.name,
     type: session.configuration?.type || null,
     renderer: session.configuration?.renderer || entry?.renderer || null,
-    protocol: entry?.type || null,
+    protocol: session.configuration?.protocol || (entry ? getPrimaryProtocol(entry) : null),
     icon: entry?.icon || null,
     startedAt: session.createdAt,
     owner: toAccountView(owner),

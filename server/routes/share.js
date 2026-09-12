@@ -3,6 +3,7 @@ const SessionManager = require("../lib/SessionManager");
 const Entry = require("../models/Entry");
 const Organization = require("../models/Organization");
 const Account = require("../models/Account");
+const { getPrimaryProtocol } = require("../utils/entryProtocols");
 
 const app = Router();
 
@@ -40,7 +41,7 @@ app.get("/:shareId", async (req, res) => {
             type: entry.type,
             icon: entry.icon,
             renderer: session.configuration.renderer || "terminal",
-            protocol: entry.config?.protocol,
+            protocol: session.configuration.protocol || getPrimaryProtocol(entry),
         },
         writable: session.shareWritable,
         type: session.configuration.type || undefined,

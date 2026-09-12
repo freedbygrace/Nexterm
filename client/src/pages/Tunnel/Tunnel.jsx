@@ -48,7 +48,9 @@ export const Tunnel = () => {
 
     useEffect(() => {
         if (server?.identities?.length > 0 && identities?.length > 0 && !selectedIdentityId) {
-            setSelectedIdentityId(server.identities[0]);
+            // Tunnels run over SSH, so prefer the identity configured for that protocol.
+            const sshDefault = server.protocolIdentities?.ssh;
+            setSelectedIdentityId(sshDefault && server.identities.includes(sshDefault) ? sshDefault : server.identities[0]);
         }
     }, [server, identities, selectedIdentityId]);
 

@@ -292,6 +292,7 @@
       "empty": "You don't have any snippets yet. Create your first one!",
       "actions": {
         "edit": "Edit snippet",
+        "duplicate": "Duplicate snippet",
         "delete": "Delete snippet"
       }
     },
@@ -322,6 +323,7 @@
       "success": {
         "created": "Snippet created successfully",
         "updated": "Snippet updated successfully",
+        "duplicated": "Snippet duplicated successfully",
         "deleted": "Snippet deleted successfully"
       },
       "errors": {
@@ -329,6 +331,7 @@
         "loadFailed": "Failed to load snippet data",
         "saveFailed": "Failed to save snippet",
         "deleteFailed": "Failed to delete snippet",
+        "duplicateFailed": "Failed to duplicate snippet",
         "reorderFailed": "Failed to reorder snippet"
       }
     }
@@ -377,6 +380,7 @@
       "empty": "You don't have any scripts yet. Create your first one!",
       "actions": {
         "edit": "Edit script",
+        "duplicate": "Duplicate script",
         "delete": "Delete script"
       }
     },
@@ -417,12 +421,14 @@
       "success": {
         "created": "Script created successfully",
         "updated": "Script updated successfully",
+        "duplicated": "Script duplicated successfully",
         "deleted": "Script deleted successfully",
         "reordered": "Script reordered successfully"
       },
       "errors": {
         "loadFailed": "Failed to load script data",
         "deleteFailed": "Failed to delete script",
+        "duplicateFailed": "Failed to duplicate script",
         "reorderFailed": "Failed to reorder script"
       }
     },

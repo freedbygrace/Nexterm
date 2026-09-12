@@ -1,8 +1,8 @@
 import "./styles.sass";
-import { mdiPencil, mdiTrashCan, mdiChevronLeft, mdiChevronRight, mdiCloudDownloadOutline, mdiLinux } from "@mdi/js";
+import { mdiPencil, mdiContentCopy, mdiTrashCan, mdiChevronLeft, mdiChevronRight, mdiCloudDownloadOutline, mdiLinux } from "@mdi/js";
 import Icon from "@mdi/react";
 import { useScripts } from "@/common/contexts/ScriptContext.jsx";
-import { deleteRequest, patchRequest } from "@/common/utils/RequestUtil.js";
+import { deleteRequest, patchRequest, postRequest } from "@/common/utils/RequestUtil.js";
 import { useToast } from "@/common/contexts/ToastContext.jsx";
 import { useTranslation } from "react-i18next";
 import { useState, useMemo } from "react";
@@ -10,7 +10,7 @@ import { useDrag, useDrop } from "react-dnd";
 import Button from "@/common/components/Button";
 import { parseOsFilter } from "@/common/utils/osUtils.js";
 
-const ScriptItem = ({ script, onEdit, onDelete, isReadOnly, onReposition, t }) => {
+const ScriptItem = ({ script, onEdit, onDuplicate, onDelete, isReadOnly, onReposition, t }) => {
     const [{ isDragging }, drag] = useDrag({ type: "script", item: { id: script.id }, canDrag: !isReadOnly, collect: m => ({ isDragging: m.isDragging() }) });
     const [{ isOver }, drop] = useDrop({ accept: "script", drop: item => item.id !== script.id && onReposition(item.id, script.id), collect: m => ({ isOver: m.isOver() && m.getItem()?.id !== script.id }) });
     const osFilter = parseOsFilter(script.osFilter);
@@ -36,6 +36,7 @@ const ScriptItem = ({ script, onEdit, onDelete, isReadOnly, onReposition, t }) =
             {!isReadOnly && (
                 <div className="script-actions">
                     <button className="action-button" onClick={e => { e.stopPropagation(); onEdit(script.id); }} title={t('scripts.list.actions.edit')}><Icon path={mdiPencil} /></button>
+                    <button className="action-button" onClick={e => { e.stopPropagation(); onDuplicate(script.id); }} title={t('scripts.list.actions.duplicate')}><Icon path={mdiContentCopy} /></button>
                     <button className="action-button delete" onClick={e => { e.stopPropagation(); onDelete(script.id); }} title={t('scripts.list.actions.delete')}><Icon path={mdiTrashCan} /></button>
                 </div>
             )}
@@ -69,12 +70,21 @@ export const ScriptsList = ({ scripts, onEdit, selectedOrganization, isReadOnly 
         } catch (e) { sendToast("Error", e.message || t('scripts.messages.errors.reorderFailed')); }
     };
 
+    const handleDuplicate = async (id) => {
+        try {
+            const copy = await postRequest(`scripts/${id}/duplicate${queryParams}`, {});
+            sendToast("Success", t('scripts.messages.success.duplicated'));
+            await reload();
+            if (copy?.id) onEdit(copy.id);
+        } catch (e) { sendToast("Error", e.message || t('scripts.messages.errors.duplicateFailed')); }
+    };
+
     if (!scripts?.length) return <div className="scripts-list-container"><div className="empty-scripts"><p>{t('scripts.list.empty')}</p></div></div>;
 
     return (
         <div className="scripts-list-container">
             <div className="script-grid">
-                {paginatedScripts.map(s => <ScriptItem key={s.id} script={s} onEdit={onEdit} onDelete={handleDelete} isReadOnly={isReadOnly} onReposition={handleReposition} t={t} />)}
+                {paginatedScripts.map(s => <ScriptItem key={s.id} script={s} onEdit={onEdit} onDuplicate={handleDuplicate} onDelete={handleDelete} isReadOnly={isReadOnly} onReposition={handleReposition} t={t} />)}
             </div>
             {scripts.length > itemsPerPage && (
                 <div className="pagination">

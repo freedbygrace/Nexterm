@@ -1,8 +1,8 @@
 import "./styles.sass";
-import { mdiPencil, mdiTrashCan, mdiChevronLeft, mdiChevronRight, mdiCloudDownloadOutline, mdiLinux } from "@mdi/js";
+import { mdiPencil, mdiContentCopy, mdiTrashCan, mdiChevronLeft, mdiChevronRight, mdiCloudDownloadOutline, mdiLinux } from "@mdi/js";
 import Icon from "@mdi/react";
 import { useSnippets } from "@/common/contexts/SnippetContext.jsx";
-import { deleteRequest, patchRequest } from "@/common/utils/RequestUtil.js";
+import { deleteRequest, patchRequest, postRequest } from "@/common/utils/RequestUtil.js";
 import { useToast } from "@/common/contexts/ToastContext.jsx";
 import { useTranslation } from "react-i18next";
 import { useState, useMemo } from "react";
@@ -10,7 +10,7 @@ import { useDrag, useDrop } from "react-dnd";
 import Button from "@/common/components/Button";
 import { parseOsFilter } from "@/common/utils/osUtils.js";
 
-const SnippetItem = ({ snippet, onEdit, onDelete, isReadOnly, onReposition, t }) => {
+const SnippetItem = ({ snippet, onEdit, onDuplicate, onDelete, isReadOnly, onReposition, t }) => {
     const [{ isDragging }, drag] = useDrag({ type: "snippet", item: { id: snippet.id }, canDrag: !isReadOnly, collect: m => ({ isDragging: m.isDragging() }) });
     const [{ isOver }, drop] = useDrop({ accept: "snippet", drop: item => item.id !== snippet.id && onReposition(item.id, snippet.id), collect: m => ({ isOver: m.isOver() && m.getItem()?.id !== snippet.id }) });
     const osFilter = parseOsFilter(snippet.osFilter);
@@ -36,6 +36,7 @@ const SnippetItem = ({ snippet, onEdit, onDelete, isReadOnly, onReposition, t })
             {!isReadOnly && (
                 <div className="snippet-actions">
                     <button className="action-button" onClick={e => { e.stopPropagation(); onEdit(snippet.id); }} title={t('snippets.list.actions.edit')}><Icon path={mdiPencil} /></button>
+                    <button className="action-button" onClick={e => { e.stopPropagation(); onDuplicate(snippet.id); }} title={t('snippets.list.actions.duplicate')}><Icon path={mdiContentCopy} /></button>
                     <button className="action-button delete" onClick={e => { e.stopPropagation(); onDelete(snippet.id); }} title={t('snippets.list.actions.delete')}><Icon path={mdiTrashCan} /></button>
                 </div>
             )}
@@ -68,12 +69,21 @@ export const SnippetsList = ({ snippets, onEdit, selectedOrganization, isReadOnl
         } catch (e) { sendToast("Error", e.message || t('snippets.messages.errors.reorderFailed')); }
     };
 
+    const handleDuplicate = async (id) => {
+        try {
+            const copy = await postRequest(`snippets/${id}/duplicate${queryParams}`, {});
+            sendToast("Success", t('snippets.messages.success.duplicated'));
+            await loadAllSnippets();
+            if (copy?.id) onEdit(copy.id);
+        } catch (e) { sendToast("Error", e.message || t('snippets.messages.errors.duplicateFailed')); }
+    };
+
     if (!snippets?.length) return <div className="snippets-list-container"><div className="empty-snippets"><p>{t('snippets.list.empty')}</p></div></div>;
 
     return (
         <div className="snippets-list-container">
             <div className="snippet-grid">
-                {paginatedSnippets.map(s => <SnippetItem key={s.id} snippet={s} onEdit={onEdit} onDelete={handleDelete} isReadOnly={isReadOnly} onReposition={handleReposition} t={t} />)}
+                {paginatedSnippets.map(s => <SnippetItem key={s.id} snippet={s} onEdit={onEdit} onDuplicate={handleDuplicate} onDelete={handleDelete} isReadOnly={isReadOnly} onReposition={handleReposition} t={t} />)}
             </div>
             {snippets.length > itemsPerPage && (
                 <div className="pagination">

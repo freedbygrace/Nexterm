@@ -49,7 +49,12 @@ jobs:
           node "$GITHUB_WORKSPACE/server/index.js" > boot.log 2>&1 &
           PID=$!
           for i in $(seq 1 90); do
-            if curl -sf -o /dev/null http://127.0.0.1:6999/api/service; then echo "server up after ${i}s"; kill $PID; exit 0; fi
+            code=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:6999/api/service || true)
+            if [ -n "$code" ] && [ "$code" != "000" ]; then
+              echo "server answered HTTP $code after ${i} polls"
+              grep -q "Server listening on port" boot.log || { echo "server did not log readiness"; cat boot.log; kill $PID; exit 1; }
+              kill $PID; exit 0
+            fi
             if ! kill -0 $PID 2>/dev/null; then echo "server exited early"; cat boot.log; exit 1; fi
             sleep 2
           done

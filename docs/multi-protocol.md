@@ -18,6 +18,12 @@ Identities are shared by all protocols of the entry. The identity tab shows the 
 for the enabled protocols (for example SSH keys are only offered while SSH or SFTP is enabled), and the settings tab
 shows the union of the protocol-specific settings (RDP display options, telnet auto-login, jump hosts, ...).
 
+When an entry links two or more identities, the protocol list gains an **Identity** column: pick, for example, the
+Windows account for RDP and keep the entry default (the first linked identity) for SSH. The chosen identity is used
+whenever that protocol is opened without picking one explicitly. In the API this is `identityId` inside the protocol
+entry (`"rdp": { "enabled": true, "port": 3389, "identityId": 12 }`); the list endpoint reports the mapping as
+`protocolIdentities`.
+
 ## Connecting
 
 Right-click an entry:

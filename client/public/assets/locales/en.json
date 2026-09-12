@@ -1199,7 +1199,7 @@
         "description": "Configure how Nexterm checks the online/offline status of your servers.",
         "enable": {
           "title": "Enable Status Checker",
-          "description": "Automatically check if servers are online or offline. When disabled, all servers will be marked as online."
+          "description": "Probe the port of every enabled protocol through the engine and show per-protocol reachability in the server list. When disabled, all servers will be marked as online."
         },
         "interval": {
           "title": "Check Interval",
@@ -1715,6 +1715,10 @@
           "title": "Enable Performance Monitoring",
           "description": "Collect CPU, memory, disk, and network metrics for this server"
         },
+        "reachability": {
+          "title": "Reachability checks",
+          "description": "Periodically probe the port of every enabled protocol and show the result in the server list"
+        },
         "wakeOnLan": {
           "title": "Enable Wake-On-LAN",
           "description": "Allow waking this server remotely using its MAC address"
@@ -2122,6 +2126,14 @@
     "liveSessions": {
       "activeOn": "Live sessions: {{users}}",
       "unknownUser": "Unknown user"
+    },
+    "reachability": {
+      "online": "online",
+      "offline": "offline",
+      "unknown": "not checked",
+      "checkedJustNow": "checked just now",
+      "checkedMinutesAgo": "checked {{count}} min ago",
+      "checkedHoursAgo": "checked {{count}} h ago"
     }
   },
   "support": {

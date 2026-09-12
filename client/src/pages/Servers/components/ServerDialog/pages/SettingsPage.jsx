@@ -3,7 +3,7 @@ import SelectBox from "@/common/components/SelectBox";
 import ToggleSwitch from "@/common/components/ToggleSwitch";
 import { ServerContext } from "@/common/contexts/ServerContext.jsx";
 import Icon from "@mdi/react";
-import { mdiServerNetwork, mdiClose, mdiPlus, mdiChartLine, mdiMonitor, mdiPalette, mdiVolumeHigh, mdiPowerPlug, mdiKeyboardOutline, mdiShieldLock } from "@mdi/js";
+import { mdiServerNetwork, mdiClose, mdiPlus, mdiChartLine, mdiMonitor, mdiPalette, mdiVolumeHigh, mdiPowerPlug, mdiKeyboardOutline, mdiShieldLock, mdiLanConnect } from "@mdi/js";
 import { useTranslation } from "react-i18next";
 
 const COLOR_DEPTHS = [
@@ -84,6 +84,7 @@ const SettingsPage = ({ config, setConfig, monitoringEnabled, setMonitoringEnabl
     const [enableDesktopComposition, setEnableDesktopComposition] = useState(config?.enableDesktopComposition === true);
     const [enableMenuAnimations, setEnableMenuAnimations] = useState(config?.enableMenuAnimations === true);
     const [wakeOnLanEnabled, setWakeOnLanEnabled] = useState(config?.wakeOnLanEnabled === true);
+    const [statusCheckEnabled, setStatusCheckEnabled] = useState(config?.statusCheckEnabled !== false);
     const [rdpSecurity, setRdpSecurity] = useState(config?.rdpSecurity || "");
     const [backspaceMode, setBackspaceMode] = useState(config?.backspaceMode || "del");
     const [deleteMode, setDeleteMode] = useState(config?.deleteMode || "vt");
@@ -114,6 +115,7 @@ const SettingsPage = ({ config, setConfig, monitoringEnabled, setMonitoringEnabl
         if (config?.enableDesktopComposition !== undefined) setEnableDesktopComposition(config.enableDesktopComposition);
         if (config?.enableMenuAnimations !== undefined) setEnableMenuAnimations(config.enableMenuAnimations);
         if (config?.wakeOnLanEnabled !== undefined) setWakeOnLanEnabled(config.wakeOnLanEnabled);
+        if (config?.statusCheckEnabled !== undefined) setStatusCheckEnabled(config.statusCheckEnabled !== false);
         if (config?.rdpSecurity !== undefined) setRdpSecurity(config.rdpSecurity);
         if (config?.backspaceMode !== undefined) setBackspaceMode(config.backspaceMode);
         if (config?.deleteMode !== undefined) setDeleteMode(config.deleteMode);
@@ -281,6 +283,21 @@ const SettingsPage = ({ config, setConfig, monitoringEnabled, setMonitoringEnabl
                         </span>
                     </div>
                     <ToggleSwitch checked={monitoringEnabled} onChange={setMonitoringEnabled} id="monitoring-toggle" />
+                </div>
+            )}
+
+            {fieldConfig.showIpPort && (
+                <div className="settings-toggle">
+                    <div className="settings-toggle-info">
+                        <span className="settings-toggle-label">
+                            <Icon path={mdiLanConnect} size={0.8} style={{ marginRight: '8px', verticalAlign: 'middle' }} />
+                            {t('servers.dialog.settings.reachability.title')}
+                        </span>
+                        <span className="settings-toggle-description">
+                            {t('servers.dialog.settings.reachability.description')}
+                        </span>
+                    </div>
+                    <ToggleSwitch checked={statusCheckEnabled} onChange={(val) => handleDisplaySettingChange('statusCheckEnabled', val, setStatusCheckEnabled)} id="status-check-toggle" />
                 </div>
             )}
 

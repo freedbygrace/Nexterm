@@ -13,6 +13,16 @@ import { patchRequest } from "@/common/utils/RequestUtil.js";
 import { DropIndicator } from "../DropIndicator";
 import { getServerProtocols, PROTOCOL_LABELS } from "@/common/utils/ProtocolUtil.js";
 
+/** "checked just now" / "checked 2 min ago" / "checked 3 h ago" for a status-check timestamp. */
+const formatCheckedAgo = (checkedAt, t) => {
+    const elapsed = Date.now() - new Date(checkedAt).getTime();
+    if (!Number.isFinite(elapsed)) return null;
+    const minutes = Math.floor(elapsed / 60000);
+    if (minutes < 1) return t("servers.reachability.checkedJustNow");
+    if (minutes < 60) return t("servers.reachability.checkedMinutesAgo", { count: minutes });
+    return t("servers.reachability.checkedHoursAgo", { count: Math.floor(minutes / 60) });
+};
+
 export const ServerObject = ({ id, name, position, folderId, organizationId, nestedLevel, icon, type, connectToServer, status, tags = [], hibernatedSessionCount = 0 }) => {
     const { loadServers, getServerById } = useContext(ServerContext);
     const { getLiveSessionsForEntry } = useLiveSessions();
@@ -95,6 +105,17 @@ export const ServerObject = ({ id, name, position, folderId, organizationId, nes
         : [];
     const showProtocolChips = protocolChips.length > 1;
 
+    // Per-protocol reachability from the status checker (null while unknown or when checks are disabled).
+    const statusDetails = server?.type === "server" ? server.statusDetails : null;
+    const protocolStatus = statusDetails?.protocols || {};
+    const checkedLabel = statusDetails?.checkedAt ? formatCheckedAgo(statusDetails.checkedAt, t) : null;
+    const protocolTitle = (p) => {
+        const label = PROTOCOL_LABELS[p] || p.toUpperCase();
+        const state = t(`servers.reachability.${protocolStatus[p] || "unknown"}`);
+        return checkedLabel && protocolStatus[p] ? `${label}: ${state} (${checkedLabel})` : `${label}: ${state}`;
+    };
+    const showStatusDot = Boolean(statusDetails) && !showProtocolChips && (status === "online" || status === "offline");
+
     return (
         <div 
             className={"server-object"}
@@ -113,15 +134,22 @@ export const ServerObject = ({ id, name, position, folderId, organizationId, nes
                     : (status === 'offline' ? "system-icon system-icon-offline" : "system-icon")
             }>
                 <Icon path={getIconPath(icon)} />
+                {showStatusDot && (
+                    <span className={`status-dot status-dot-${status}`}
+                          title={`${t(`servers.reachability.${status}`)}${checkedLabel ? ` (${checkedLabel})` : ""}`} />
+                )}
             </div>
             <div className="server-text">
                 <p className="server-name truncate-text">{name}</p>
                 {noteLine && <span className="server-note truncate-text">{noteLine}</span>}
             </div>
             {showProtocolChips && (
-                <div className="protocol-chips" title={protocolChips.map(p => PROTOCOL_LABELS[p] || p).join(" · ")}>
+                <div className="protocol-chips">
                     {protocolChips.map(p => (
-                        <span key={p} className="protocol-chip">{PROTOCOL_LABELS[p] || p.toUpperCase()}</span>
+                        <span key={p} title={protocolTitle(p)}
+                              className={`protocol-chip${protocolStatus[p] ? ` protocol-chip-${protocolStatus[p]}` : ""}`}>
+                            {PROTOCOL_LABELS[p] || p.toUpperCase()}
+                        </span>
                     ))}
                 </div>
             )}

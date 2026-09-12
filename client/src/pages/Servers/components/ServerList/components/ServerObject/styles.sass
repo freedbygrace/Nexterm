@@ -17,6 +17,7 @@
     gap: 0.625rem
 
   .system-icon
+    position: relative
     width: 1.5rem
     height: 1.5rem
     display: flex
@@ -36,6 +37,22 @@
 
       @media (max-width: breakpoints.$mobile)
         width: 1.125rem
+
+    // Reachability dot for single-protocol entries (multi-protocol entries colour their chips instead)
+    .status-dot
+      position: absolute
+      right: -3px
+      bottom: -3px
+      width: 7px
+      height: 7px
+      border-radius: 50%
+      border: 1.5px solid colors.$background
+
+    .status-dot-online
+      background-color: colors.$success
+
+    .status-dot-offline
+      background-color: colors.$error
 
   .system-icon-offline
     background-color: colors.$gray
@@ -89,6 +106,17 @@
       border-radius: 0.3rem
       background-color: colors.$gray
       color: colors.$subtext
+      border: 1px solid transparent
+
+    // Coloured by the last reachability check; chips without a class are unknown
+    .protocol-chip-online
+      background-color: colors.$primary-opacity
+      border-color: colors.$primary
+      color: colors.$primary
+
+    .protocol-chip-offline
+      opacity: 0.5
+      text-decoration: line-through
 
   .server-name
     margin: 0

@@ -66,20 +66,21 @@ class SessionManager extends ChangeNotifier {
   AppSession? getSession(String id) => _sessions[id];
   bool get hasActiveSessions => _sessions.isNotEmpty;
 
+  /// [protocol] selects which enabled protocol of a multi-protocol entry to open (null = primary).
   Future<AppSession> createGuacSession({
     required String token,
     required Server server,
     Map<String, dynamic>? directIdentity,
     String? connectionReason,
+    String? protocol,
   }) async {
-    final identityId = directIdentity != null
-        ? null
-        : (server.identities?.isNotEmpty == true ? server.identities!.first : null);
+    final identityId = directIdentity != null ? null : server.defaultIdentityFor(protocol ?? server.protocol);
 
     final cs = await ConnectionService.createSession(
       token: token,
       entryId: server.id is int ? server.id : int.parse(server.id.toString()),
       identityId: identityId ?? 0,
+      type: protocol,
       directIdentity: directIdentity,
       connectionReason: connectionReason,
     );
@@ -106,15 +107,15 @@ class SessionManager extends ChangeNotifier {
     required Server server,
     Map<String, dynamic>? directIdentity,
     String? connectionReason,
+    String? protocol,
   }) async {
-    final identityId = directIdentity != null
-        ? null
-        : (server.identities?.isNotEmpty == true ? server.identities!.first : null);
+    final identityId = directIdentity != null ? null : server.defaultIdentityFor(protocol ?? server.protocol);
 
     final cs = await ConnectionService.createSession(
       token: token,
       entryId: server.id is int ? server.id : int.parse(server.id.toString()),
       identityId: identityId ?? 0,
+      type: protocol,
       directIdentity: directIdentity,
       connectionReason: connectionReason,
     );
@@ -152,16 +153,16 @@ class SessionManager extends ChangeNotifier {
     required Server server,
     Map<String, dynamic>? directIdentity,
     String? connectionReason,
+    String? protocol,
   }) async {
-    final identityId = directIdentity != null
-        ? null
-        : (server.identities?.isNotEmpty == true ? server.identities!.first : null);
+    final fileProtocol = protocol ?? 'sftp';
+    final identityId = directIdentity != null ? null : server.defaultIdentityFor(fileProtocol);
 
     final cs = await ConnectionService.createSession(
       token: token,
       entryId: server.id is int ? server.id : int.parse(server.id.toString()),
       identityId: identityId ?? 0,
-      type: 'sftp',
+      type: fileProtocol,
       directIdentity: directIdentity,
       connectionReason: connectionReason,
     );
@@ -305,7 +306,9 @@ class SessionManager extends ChangeNotifier {
     final cfgType = config['type'] as String?;
     final renderer = config['renderer'] as String?;
     if (cfgType == 'sftp' || renderer == 'sftp') return ConnectionType.sftp;
-    final protocol = server.protocol?.toLowerCase();
+    // Sessions carry the protocol they were opened with; older servers only expose the entry's primary.
+    final protocol = (config['protocol'] as String?)?.toLowerCase() ?? server.protocol?.toLowerCase();
+    if (protocol == 'sftp' || protocol == 'ftp' || protocol == 'ftps') return ConnectionType.sftp;
     if (protocol == 'rdp' || protocol == 'vnc' || renderer == 'guac') {
       return ConnectionType.guacamole;
     }

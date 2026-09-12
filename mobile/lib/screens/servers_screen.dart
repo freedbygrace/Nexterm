@@ -469,8 +469,9 @@ class _ServersScreenState extends State<ServersScreen> {
     );
   }
 
+  /// [protocol] picks one of the entry's enabled protocols; null uses the entry's primary protocol.
   Future<void> _initiateConnection(Server server,
-      {ConnectionType type = ConnectionType.terminal, Map<String, dynamic>? directIdentity}) async {
+      {ConnectionType type = ConnectionType.terminal, Map<String, dynamic>? directIdentity, String? protocol}) async {
     final token = widget.authManager.sessionToken;
     if (token == null) return;
 
@@ -484,13 +485,13 @@ class _ServersScreenState extends State<ServersScreen> {
       switch (type) {
         case ConnectionType.guacamole:
           await widget.sessionManager.createGuacSession(
-            token: token, server: server, directIdentity: directIdentity, connectionReason: connectionReason);
+            token: token, server: server, directIdentity: directIdentity, connectionReason: connectionReason, protocol: protocol);
         case ConnectionType.terminal:
           await widget.sessionManager.createTerminalSession(
-            token: token, server: server, directIdentity: directIdentity, connectionReason: connectionReason);
+            token: token, server: server, directIdentity: directIdentity, connectionReason: connectionReason, protocol: protocol);
         case ConnectionType.sftp:
           await widget.sessionManager.createSftpSession(
-            token: token, server: server, directIdentity: directIdentity, connectionReason: connectionReason);
+            token: token, server: server, directIdentity: directIdentity, connectionReason: connectionReason, protocol: protocol);
       }
       if (mounted) widget.onSwitchToSessions?.call();
     } catch (e) {
@@ -599,6 +600,7 @@ class _ServersScreenState extends State<ServersScreen> {
               ? ConnectionType.sftp
               : ConnectionType.terminal,
       directIdentity: directIdentity,
+      protocol: server.protocol?.toLowerCase(),
     );
   }
 
@@ -614,19 +616,18 @@ class _ServersScreenState extends State<ServersScreen> {
       _quickConnect(server);
       return;
     }
-    if (ServerService.isGuacamoleProtocol(server.protocol) || server.type == 'pve-qemu') {
-      _initiateConnection(server, type: ConnectionType.guacamole);
+    if (server.isPve) {
+      _initiateConnection(server, type: server.type == 'pve-qemu' ? ConnectionType.guacamole : ConnectionType.terminal);
       return;
     }
-    final protocolLower = server.protocol?.toLowerCase();
-    final isFileProtocol = protocolLower == 'sftp' || protocolLower == 'ftp' || protocolLower == 'ftps';
-    if (isFileProtocol) {
-      _initiateConnection(server, type: ConnectionType.sftp);
-      return;
-    }
-    final isSSH = protocolLower == 'ssh' && !server.isPve;
-    if (!isSSH) {
+    // One option per enabled protocol; a single option connects straight away.
+    final options = _connectionOptionsFor(server);
+    if (options.isEmpty) {
       _initiateConnection(server);
+      return;
+    }
+    if (options.length == 1) {
+      _initiateConnection(server, type: options.first.type, protocol: options.first.protocol);
       return;
     }
     showModalBottomSheet(
@@ -654,18 +655,44 @@ class _ServersScreenState extends State<ServersScreen> {
           ]),
         ),
         const SizedBox(height: 8),
-        Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: Row(children: [
-          Expanded(child: _connectionOption(ctx, MdiIcons.consoleLine, 'Terminal', 'SSH session', cs, () {
-            Navigator.pop(ctx); _initiateConnection(server);
-          })),
-          const SizedBox(width: 10),
-          Expanded(child: _connectionOption(ctx, MdiIcons.folderOutline, 'SFTP', 'File manager', cs, () {
-            Navigator.pop(ctx); _initiateConnection(server, type: ConnectionType.sftp);
-          })),
-        ])),
+        Padding(padding: const EdgeInsets.symmetric(horizontal: 16), child: LayoutBuilder(
+          builder: (ctx2, constraints) {
+            final width = (constraints.maxWidth - 10) / 2;
+            return Wrap(spacing: 10, runSpacing: 10, children: options.map((o) => SizedBox(
+              width: width,
+              child: _connectionOption(ctx, o.icon, o.title, o.subtitle, cs, () {
+                Navigator.pop(ctx); _initiateConnection(server, type: o.type, protocol: o.protocol);
+              }),
+            )).toList());
+          },
+        )),
         const SizedBox(height: 16),
       ])),
     );
+  }
+
+  /// Connection choices for a server entry, one per enabled protocol (primary first).
+  List<_ConnectionOption> _connectionOptionsFor(Server server) {
+    final options = <_ConnectionOption>[];
+    for (final protocol in server.enabledProtocols) {
+      switch (protocol) {
+        case 'ssh':
+          options.add(_ConnectionOption('ssh', ConnectionType.terminal, MdiIcons.consoleLine, 'Terminal', 'SSH session'));
+        case 'telnet':
+          options.add(_ConnectionOption('telnet', ConnectionType.terminal, MdiIcons.consoleLine, 'Telnet', 'Telnet session'));
+        case 'rdp':
+          options.add(_ConnectionOption('rdp', ConnectionType.guacamole, MdiIcons.microsoftWindows, 'RDP', 'Remote desktop'));
+        case 'vnc':
+          options.add(_ConnectionOption('vnc', ConnectionType.guacamole, MdiIcons.remoteDesktop, 'VNC', 'Remote desktop'));
+        case 'sftp':
+          options.add(_ConnectionOption('sftp', ConnectionType.sftp, MdiIcons.folderOutline, 'SFTP', 'File manager'));
+        case 'ftp':
+          options.add(_ConnectionOption('ftp', ConnectionType.sftp, MdiIcons.folderOutline, 'FTP', 'File manager'));
+        case 'ftps':
+          options.add(_ConnectionOption('ftps', ConnectionType.sftp, MdiIcons.folderOutline, 'FTPS', 'File manager'));
+      }
+    }
+    return options;
   }
 
   Widget _connectionOption(BuildContext ctx, IconData icon, String title, String sub, ColorScheme cs, VoidCallback onTap) =>
@@ -705,4 +732,15 @@ class _ServersScreenState extends State<ServersScreen> {
     if (c.startsWith('#')) { try { return Color(int.parse('FF${c.substring(1)}', radix: 16)); } catch (_) {} }
     return Theme.of(context).colorScheme.primary;
   }
+}
+
+/// A way to open a server entry: the protocol to request and how the app renders it.
+class _ConnectionOption {
+  final String protocol;
+  final ConnectionType type;
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  const _ConnectionOption(this.protocol, this.type, this.icon, this.title, this.subtitle);
 }

@@ -568,6 +568,7 @@ class ControlPlaneServer extends EventEmitter {
                     errorMessage: result.errorMessage(),
                     connectionId: result.connectionId(),
                     metadata: result.metadata(),
+                    localPort: result.localPort(),
                     sessionId,
                 };
 

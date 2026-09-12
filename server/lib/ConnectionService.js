@@ -547,9 +547,22 @@ const prepareGuacamoleSession = async (sessionId, entry, identity, organizationI
     const port = Number.parseInt(params.port || cfg.port || defaultPort, 10);
     const jumpHosts = await resolveJumpHosts(entry);
 
-    const dataSocket = await openEngineSession(
+    const { dataSocket, result } = await openEngineSessionWithResult(
         sessionId, sessionType, host, port, params, jumpHosts, entry.config?.engineId
     );
+
+    if (jumpHosts.length > 0) {
+        if (!result?.localPort) {
+            dataSocket.destroy();
+            controlPlane.closeSession(sessionId);
+            throw new Error("Engine did not provide a jump host tunnel; please update the engine");
+        }
+        params.hostname = "127.0.0.1";
+        params.port = String(result.localPort);
+        logger.info("Guacamole session routed through jump host tunnel", {
+            sessionId, target: `${host}:${port}`, localPort: result.localPort,
+        });
+    }
 
     const recordingEnabled = await isRecordingEnabled(organizationId);
 

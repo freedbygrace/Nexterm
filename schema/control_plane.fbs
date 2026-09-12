@@ -102,6 +102,7 @@ table SessionOpenResult {
     error_message: string;
     connection_id: string;
     metadata: string;
+    local_port: uint16;
 }
 
 table SessionClose {

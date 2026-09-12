@@ -17,6 +17,8 @@ concurrency:
 
 jobs:
   build:
+    # GitHub Pages must be enabled for the repository; forks opt in with the DEPLOY_DOCS=true repository variable.
+    if: github.repository == 'gnmyt/Nexterm' || vars.DEPLOY_DOCS == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -41,6 +43,8 @@ jobs:
           path: docs/.vitepress/dist
 
   deploy:
+    # GitHub Pages must be enabled for the repository; forks opt in with the DEPLOY_DOCS=true repository variable.
+    if: github.repository == 'gnmyt/Nexterm' || vars.DEPLOY_DOCS == 'true'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

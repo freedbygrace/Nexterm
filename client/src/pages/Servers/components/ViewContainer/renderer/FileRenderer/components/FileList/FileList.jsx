@@ -22,6 +22,7 @@ export const FileList = forwardRef(({
     resolveSymlink, session, createFile, createFolder, moveFiles, copyFiles, isActive,
     onOpenTerminal, onPropertiesMessage, searchQuery = "", onSearchResults,
     capabilities = { shell: true, terminal: true },
+    onExternalDrop,
 }, ref) => {
     const { t } = useTranslation();
     const { showThumbnails, showHiddenFiles, confirmBeforeDelete, dragDropAction } = usePreferences();
@@ -118,7 +119,7 @@ export const FileList = forwardRef(({
         handleDrop, handleContainerDrop, handleDropAction, setPendingDrop,
     } = useDragDrop({
         path, sessionId: session.id, selectedItems, isItemSelected,
-        moveFiles, copyFiles, dragDropAction, updatePath,
+        moveFiles, copyFiles, dragDropAction, updatePath, onExternalDrop,
     });
 
     const handleItemClick = useCallback((event, item) => {

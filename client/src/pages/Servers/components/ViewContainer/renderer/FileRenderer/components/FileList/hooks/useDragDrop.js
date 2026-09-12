@@ -1,6 +1,14 @@
 import { useState, useCallback, useRef } from "react";
 
-export const useDragDrop = ({ path, sessionId, selectedItems, isItemSelected, moveFiles, copyFiles, dragDropAction, updatePath }) => {
+const hasNativeFiles = (event) => event.dataTransfer.types.includes("Files");
+const hasInternalFiles = (event) => event.dataTransfer.types.includes("application/x-sftp-files");
+
+/**
+ * Drag and drop inside the file list. Internal drags (application/x-sftp-files) move or copy remote
+ * files; native drags from the OS (Files) are uploads and are routed to `onExternalDrop` when they
+ * land on a folder, otherwise they bubble up to the file manager and upload into the current directory.
+ */
+export const useDragDrop = ({ path, sessionId, selectedItems, isItemSelected, moveFiles, copyFiles, dragDropAction, updatePath, onExternalDrop }) => {
     const [draggedItems, setDraggedItems] = useState([]);
     const [dropTarget, setDropTarget] = useState(null);
     const [pendingDrop, setPendingDrop] = useState(null);
@@ -47,9 +55,13 @@ export const useDragDrop = ({ path, sessionId, selectedItems, isItemSelected, mo
     }, []);
 
     const handleDragOver = useCallback((event, item) => {
-        if (item.type !== "folder" || !event.dataTransfer.types.includes("application/x-sftp-files")) return;
+        if (item.type !== "folder") return;
+        const internal = hasInternalFiles(event);
+        if (!internal && !hasNativeFiles(event)) return;
         event.preventDefault();
-        event.stopPropagation();
+        // Native drags keep bubbling so the file manager can show its drop hint.
+        if (internal) event.stopPropagation();
+        else event.dataTransfer.dropEffect = "copy";
         if (dropTarget !== item.name) {
             setDropTarget(item.name);
             if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
@@ -78,11 +90,22 @@ export const useDragDrop = ({ path, sessionId, selectedItems, isItemSelected, mo
     }, [moveFiles, copyFiles]);
 
     const handleDrop = useCallback((event, item, onClearSelection, openDropMenu) => {
-        event.preventDefault();
-        event.stopPropagation();
         if (hoverTimerRef.current) { clearTimeout(hoverTimerRef.current); hoverTimerRef.current = null; }
         setDropTarget(null);
         setDraggedItems([]);
+
+        if (!hasInternalFiles(event)) {
+            // Native files: upload into the hovered folder, otherwise let the file manager handle it.
+            if (item.type === "folder" && hasNativeFiles(event) && onExternalDrop) {
+                event.preventDefault();
+                event.stopPropagation();
+                onExternalDrop(event, `${path.endsWith("/") ? path : path + "/"}${item.name}`);
+            }
+            return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
         if (item.type !== "folder") return;
         try {
             const data = JSON.parse(event.dataTransfer.getData("application/x-sftp-files"));
@@ -95,12 +118,14 @@ export const useDragDrop = ({ path, sessionId, selectedItems, isItemSelected, mo
                 onClearSelection();
             }
         } catch {}
-    }, [path, sessionId, dragDropAction, executeDrop]);
+    }, [path, sessionId, dragDropAction, executeDrop, onExternalDrop]);
 
     const handleContainerDrop = useCallback((event, onClearSelection, openDropMenu) => {
+        setDraggedItems([]);
+        // Native files dropped on empty list space bubble up and upload into the current directory.
+        if (!hasInternalFiles(event)) return;
         event.preventDefault();
         event.stopPropagation();
-        setDraggedItems([]);
         try {
             const data = JSON.parse(event.dataTransfer.getData("application/x-sftp-files"));
             if (!data?.paths?.length || data.sessionId !== sessionId) return;

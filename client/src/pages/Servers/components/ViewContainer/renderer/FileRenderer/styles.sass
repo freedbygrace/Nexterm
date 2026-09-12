@@ -17,20 +17,23 @@
     display: flex
     justify-content: center
     align-items: center
-    background-color: colors.$dialog-background
-    backdrop-filter: blur(0.3rem)
+    // Never intercept pointer events: folder tiles and breadcrumbs stay valid drop targets underneath.
+    background-color: rgba(colors.$primary, 0.06)
     z-index: 100
     opacity: 0
     transition: opacity 0.2s
     pointer-events: none
+    align-items: flex-end
+    padding-bottom: 2rem
+    box-sizing: border-box
 
     &.active
       opacity: 1
-      pointer-events: auto
 
     .drag-item
-      padding: 3rem 2rem
-      max-width: 24rem
+      padding: 1rem 1.5rem
+      max-width: 28rem
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35)
       border: 2px dashed colors.$primary
       border-radius: 0.75rem
       display: flex
@@ -50,6 +53,13 @@
         font-size: 1.125rem
         text-align: center
         color: colors.$white
+
+      p
+        margin: 0
+        font-size: 0.8rem
+        text-align: center
+        color: colors.$subtext
+        word-break: break-all
 
   .file-manager
     position: relative

@@ -28,6 +28,7 @@ export const ActionBar = ({
                               createFolder,
                               uploadFile,
                               uploadFolder,
+                              onExternalDrop,
                               refreshFiles,
                               goBack,
                               goForward,
@@ -229,10 +230,15 @@ export const ActionBar = ({
     };
 
     const handlePathDragOver = useCallback((event, targetPath) => {
-        if (!event.dataTransfer.types.includes("application/x-sftp-files")) return;
+        const internal = event.dataTransfer.types.includes("application/x-sftp-files");
+        if (!internal && !event.dataTransfer.types.includes("Files")) return;
         event.preventDefault();
-        event.stopPropagation();
-        event.dataTransfer.dropEffect = event.ctrlKey || event.metaKey ? "copy" : "move";
+        if (internal) {
+            event.stopPropagation();
+            event.dataTransfer.dropEffect = event.ctrlKey || event.metaKey ? "copy" : "move";
+        } else {
+            event.dataTransfer.dropEffect = "copy";
+        }
         if (dropTarget !== targetPath) {
             setDropTarget(targetPath);
             if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
@@ -259,6 +265,11 @@ export const ActionBar = ({
             hoverTimerRef.current = null;
         }
         setDropTarget(null);
+        if (!event.dataTransfer.types.includes("application/x-sftp-files")) {
+            // Native files dropped on a breadcrumb upload into that directory.
+            if (event.dataTransfer.types.includes("Files")) onExternalDrop?.(event, targetPath);
+            return;
+        }
         try {
             const data = JSON.parse(event.dataTransfer.getData("application/x-sftp-files"));
             if (!data?.paths?.length) return;
@@ -272,7 +283,7 @@ export const ActionBar = ({
                 dropMenu.open(event, { x: event.clientX, y: event.clientY });
             }
         } catch {}
-    }, [sessionId, dropMenu, dragDropAction, moveFiles, copyFiles]);
+    }, [sessionId, dropMenu, dragDropAction, moveFiles, copyFiles, onExternalDrop]);
 
     const handleDropAction = useCallback((action) => {
         if (pendingDrop) {

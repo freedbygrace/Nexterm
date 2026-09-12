@@ -46,28 +46,49 @@ const takeDroppedEntries = (dataTransfer) => [...(dataTransfer.items ?? [])]
     .map(item => item.webkitGetAsEntry?.())
     .filter(Boolean);
 
-const collectDroppedEntries = async (entries, targetDir) => {
-    const files = [];
-    const emptyDirs = [];
+/**
+ * Walks dropped files/folders recursively. Files are handed to `onFiles` one directory at a time so
+ * uploads start while large trees are still being read; entries the browser refuses to read
+ * (permission prompts, broken shortcuts, files removed mid-drag) are counted and skipped instead of
+ * aborting the whole drop.
+ */
+const collectDroppedEntries = async (entries, targetDir, { onFiles, onEmptyDir }) => {
+    let skipped = 0;
 
     const walk = async (entry, dir) => {
         if (entry.isFile) {
-            files.push({ file: await new Promise((resolve, reject) => entry.file(resolve, reject)), targetDir: dir });
+            try {
+                const file = await new Promise((resolve, reject) => entry.file(resolve, reject));
+                onFiles([{ file, targetDir: dir }]);
+            } catch (err) {
+                console.warn("Skipping unreadable dropped file", entry.name, err);
+                skipped++;
+            }
             return;
         }
 
         const path = joinPath(dir, entry.name);
-        const children = await readAllEntries(entry.createReader());
+        let children;
+        try {
+            children = await readAllEntries(entry.createReader());
+        } catch (err) {
+            console.warn("Skipping unreadable dropped folder", entry.name, err);
+            skipped++;
+            return;
+        }
         if (!children.length) {
-            emptyDirs.push(path);
+            onEmptyDir(path);
             return;
         }
         for (const child of children) await walk(child, path);
     };
 
     for (const entry of entries) await walk(entry, targetDir);
-    return { files, emptyDirs };
+    return { skipped };
 };
+
+/** Directories dropped in browsers without the entries API show up as empty, typeless files. */
+const isProbablyDirectory = (file) => file.size === 0 && file.type === "" && !file.name.includes(".");
 
 export const FileRenderer = ({ session, disconnectFromServer, setOpenFileEditors, isActive, onOpenTerminal }) => {
     const { t } = useTranslation();
@@ -368,13 +389,27 @@ export const FileRenderer = ({ session, disconnectFromServer, setOpenFileEditors
 
     const handleFileDrop = async (entries, files, targetDir) => {
         if (!entries.length) {
-            queueUploads(files.map(file => ({ file, targetDir })));
+            const plain = files.filter(file => !isProbablyDirectory(file));
+            if (plain.length < files.length) {
+                sendToast(t("common.error"), t("servers.fileManager.toast.uploadSkipped", { count: files.length - plain.length }));
+            }
+            queueUploads(plain.map(file => ({ file, targetDir })));
             return;
         }
 
-        const { files: collected, emptyDirs } = await collectDroppedEntries(entries, targetDir);
-        for (const path of emptyDirs) sendOperation(OPERATIONS.CREATE_FOLDER, { path, recursive: true });
-        queueUploads(collected);
+        const { skipped } = await collectDroppedEntries(entries, targetDir, {
+            onFiles: queueUploads,
+            onEmptyDir: (path) => sendOperation(OPERATIONS.CREATE_FOLDER, { path, recursive: true }),
+        });
+        if (skipped) sendToast(t("common.error"), t("servers.fileManager.toast.uploadSkipped", { count: skipped }));
+    };
+
+    /** Uploads the files of a native drop event into `targetDir` (a hovered folder, breadcrumb or the current directory). */
+    const uploadDroppedTo = (event, targetDir) => {
+        setDragging(false);
+        handleFileDrop(takeDroppedEntries(event.dataTransfer), [...event.dataTransfer.files], targetDir).catch(err =>
+            sendToast(t("common.error"), t("servers.fileManager.toast.uploadFailed", { message: err.message }))
+        );
     };
 
     const handleDrag = (e) => {
@@ -383,12 +418,7 @@ export const FileRenderer = ({ session, disconnectFromServer, setOpenFileEditors
         e.stopPropagation();
         if (e.type === "dragover") setDragging(true);
         else if (e.type === "dragleave" && !dropZoneRef.current.contains(e.relatedTarget)) setDragging(false);
-        else if (e.type === "drop") {
-            setDragging(false);
-            handleFileDrop(takeDroppedEntries(e.dataTransfer), [...e.dataTransfer.files], directory).catch(err =>
-                sendToast(t("common.error"), t("servers.fileManager.toast.uploadFailed", { message: err.message }))
-            );
-        }
+        else if (e.type === "drop") uploadDroppedTo(e, directory);
     };
 
     const searchDirectories = (searchPath) => sendOperation(OPERATIONS.SEARCH_DIRECTORIES, { searchPath });
@@ -432,6 +462,7 @@ export const FileRenderer = ({ session, disconnectFromServer, setOpenFileEditors
                 <div className="drag-item">
                     <Icon path={mdiCloudUpload} />
                     <h2>{t("servers.fileManager.dropOverlay")}</h2>
+                    <p>{t("servers.fileManager.dropOverlayHint", { directory })}</p>
                 </div>
             </div>
             <div className="file-manager">
@@ -441,14 +472,14 @@ export const FileRenderer = ({ session, disconnectFromServer, setOpenFileEditors
                     historyLength={history.length} viewMode={viewMode} setViewMode={setViewMode} 
                     searchDirectories={searchDirectories} directorySuggestions={directorySuggestions} 
                     setDirectorySuggestions={setDirectorySuggestions} moveFiles={moveFiles} copyFiles={copyFiles}
-                    capabilities={capabilities}
+                    capabilities={capabilities} onExternalDrop={uploadDroppedTo}
                     sessionId={session.id} searchQuery={searchQuery} setSearchQuery={setSearchQuery} searchOpen={searchOpen}
                     setSearchOpen={setSearchOpen} closeSearch={closeSearch} searchResultCount={searchResultCount} />
                 <FileList ref={fileListRef} items={items} path={directory} updatePath={changeDirectory} sendOperation={sendOperation}
                     downloadFile={downloadFile} downloadMultipleFiles={downloadMultipleFiles} setCurrentFile={handleOpenFile} setPreviewFile={handleOpenPreview}
                     loading={loading} viewMode={viewMode} error={error || connectionError} resolveSymlink={resolveSymlink} session={session}
                     createFile={createFile} createFolder={createFolder} moveFiles={moveFiles} copyFiles={copyFiles} isActive={isActive}
-                    capabilities={capabilities}
+                    capabilities={capabilities} onExternalDrop={uploadDroppedTo}
                     searchQuery={searchQuery} onSearchResults={setSearchResultCount}
                     onOpenTerminal={onOpenTerminal} onPropertiesMessage={(handler) => { propertiesHandlerRef.current = handler; }} />
             </div>

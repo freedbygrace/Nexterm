@@ -76,7 +76,7 @@ const filterEntries = (entries, searchTerm, selectedTags = []) => {
     }
 
     const flat = flattenEntries(entries);
-    const opts = { keys: ['name', 'ip'], threshold: 0.3, ignoreLocation: true, minMatchCharLength: 1 };
+    const opts = { keys: ['name', 'ip', 'protocols'], threshold: 0.3, ignoreLocation: true, minMatchCharLength: 1 };
     let results = new Fuse(flat, opts).search(searchTerm);
     if (results.length > 0 && results.length < 3) results = new Fuse(flat, { ...opts, threshold: 0.5 }).search(searchTerm);
     else if (results.length > 20) results = new Fuse(flat, { ...opts, threshold: 0.2 }).search(searchTerm);

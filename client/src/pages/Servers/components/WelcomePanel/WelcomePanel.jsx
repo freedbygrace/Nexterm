@@ -13,7 +13,7 @@ import DownloadAppsDialog from "@/common/components/DownloadAppsDialog";
 import { DeviceLinkDialog } from "@/common/components/DeviceLinkDialog/DeviceLinkDialog.jsx";
 import { getAvatarLabel } from "@/common/utils/avatar.js";
 import { useDrop } from "react-dnd";
-import { hasProtocol } from "@/common/utils/ProtocolUtil.js";
+import { hasProtocol, getPrimaryProtocol } from "@/common/utils/ProtocolUtil.js";
 
 const formatTimeAgo = (timestamp) => {
     const diffMins = Math.floor((Date.now() - new Date(timestamp)) / 60000);
@@ -27,6 +27,19 @@ const PROTOCOL_LABELS = {
     "entry.ssh_connect": "SSH", "entry.sftp_connect": "SFTP", "entry.rdp_connect": "RDP",
     "entry.vnc_connect": "VNC",
     "entry.demo_connect": "Demo", "entry.pve_connect": "PVE",
+};
+
+// Audit action of a recent connection -> protocol to reopen it with (null = the entry's primary).
+const CONNECTION_TYPE_PROTOCOLS = {
+    "entry.rdp_connect": "rdp",
+    "entry.vnc_connect": "vnc",
+    "entry.sftp_connect": "sftp",
+};
+
+const protocolForRecent = (item, server) => {
+    const protocol = CONNECTION_TYPE_PROTOCOLS[item?.connectionType];
+    if (!protocol || !server || !hasProtocol(server, protocol)) return null;
+    return protocol === getPrimaryProtocol(server) ? null : protocol;
 };
 
 export const WelcomePanel = ({
@@ -67,8 +80,13 @@ export const WelcomePanel = ({
 
     const handleClick = (item) => {
         const hibernated = getHibernated(item.entryId);
-        if (hibernated) resumeSession(hibernated.id);
-        else connectToServer(item.entryId, item.identities?.[0] ? { id: item.identities[0] } : null);
+        if (hibernated) { resumeSession(hibernated.id); return; }
+
+        const target = getServerById(item.entryId);
+        const identity = item.identities?.[0] ? { id: item.identities[0] } : null;
+        const protocol = protocolForRecent(item, target);
+        if (protocol === "sftp" && openSFTP) openSFTP(item.entryId, identity);
+        else connectToServer(item.entryId, identity, undefined, null, protocol);
     };
 
     const handleContextMenu = (e, item) => {

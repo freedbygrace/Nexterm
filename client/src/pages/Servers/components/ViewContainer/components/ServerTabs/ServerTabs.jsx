@@ -16,6 +16,7 @@ import RemoteSessionStrip from "../RemoteSessionStrip";
 import KeyboardShortcutsMenu from "../KeyboardShortcutsMenu";
 import SnippetsMenu from "../../renderer/components/SnippetsMenu";
 import "./styles.sass";
+import { PROTOCOL_LABELS } from "@/common/utils/ProtocolUtil.js";
 
 const dropInfo = (monitor, node) => {
     if (!node) return { zone: "reorder", side: "left" };
@@ -53,6 +54,11 @@ const DraggableTab = ({
         .filter(participant => participant.accountId !== user?.id);
 
     const isNotes = session.type === "notes";
+    // Sessions opened over a non-primary protocol (or the file manager) say so in the tab title.
+    const sessionProtocol = session.type === "sftp" ? "sftp" : session.protocol;
+    const primaryProtocol = server?.type === "server" ? server?.protocol : server?.type;
+    const tabProtocolSuffix = sessionProtocol && sessionProtocol !== "web" && (session.type === "sftp" || sessionProtocol !== primaryProtocol)
+        ? ` (${PROTOCOL_LABELS[sessionProtocol] || sessionProtocol.toUpperCase()})` : "";
 
     const [{ isDragging }, drag] = useDrag({
         type: "TAB",
@@ -133,7 +139,7 @@ const DraggableTab = ({
                     ? <img src={pageInfo.icon} className="progress-icon page-favicon" alt="" />
                     : <Icon path={isNotes ? mdiNoteEditOutline : getIconPath(server.icon)} className="progress-icon" />}
             </div>
-            <h2>{pageInfo?.title || server?.name} {session.type === "sftp" ? " (SFTP)" : ""}{isNotes ? ` (${t("servers.notesPanel.title")})` : ""}</h2>
+            <h2>{pageInfo?.title || server?.name}{tabProtocolSuffix}{isNotes ? ` (${t("servers.notesPanel.title")})` : ""}</h2>
             <AvatarStack className="tab-participants" users={otherParticipants} max={2}
                          getKey={participant => participant.viewerId} />
             <div className="tab-actions">

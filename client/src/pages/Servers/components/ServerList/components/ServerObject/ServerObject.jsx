@@ -11,6 +11,7 @@ import { useContext, useRef, useState } from "react";
 import { useDrag, useDrop } from "react-dnd";
 import { patchRequest } from "@/common/utils/RequestUtil.js";
 import { DropIndicator } from "../DropIndicator";
+import { getServerProtocols, PROTOCOL_LABELS } from "@/common/utils/ProtocolUtil.js";
 
 export const ServerObject = ({ id, name, position, folderId, organizationId, nestedLevel, icon, type, connectToServer, status, tags = [], hibernatedSessionCount = 0 }) => {
     const { loadServers, getServerById } = useContext(ServerContext);
@@ -88,6 +89,12 @@ export const ServerObject = ({ id, name, position, folderId, organizationId, nes
         ? (server?.notes || "").split(/\r?\n/)[0].trim()
         : "";
 
+    // Multi-protocol entries list their protocols (SFTP is implied by SSH and not worth a chip).
+    const protocolChips = server?.type === "server"
+        ? getServerProtocols(server).filter(p => p !== "sftp" || !getServerProtocols(server).includes("ssh"))
+        : [];
+    const showProtocolChips = protocolChips.length > 1;
+
     return (
         <div 
             className={"server-object"}
@@ -111,6 +118,13 @@ export const ServerObject = ({ id, name, position, folderId, organizationId, nes
                 <p className="server-name truncate-text">{name}</p>
                 {noteLine && <span className="server-note truncate-text">{noteLine}</span>}
             </div>
+            {showProtocolChips && (
+                <div className="protocol-chips" title={protocolChips.map(p => PROTOCOL_LABELS[p] || p).join(" · ")}>
+                    {protocolChips.map(p => (
+                        <span key={p} className="protocol-chip">{PROTOCOL_LABELS[p] || p.toUpperCase()}</span>
+                    ))}
+                </div>
+            )}
             {hibernatedSessionCount > 0 && (
                 <div className="hibernation-indicator" title={`${hibernatedSessionCount} hibernated session${hibernatedSessionCount > 1 ? 's' : ''}`}>
                     <Icon path={mdiSleep} />

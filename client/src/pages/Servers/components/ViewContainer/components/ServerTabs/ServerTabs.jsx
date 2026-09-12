@@ -265,6 +265,8 @@ export const ServerTabs = ({
     setActiveSessionId,
     activeSessionId,
     closeSession,
+    reconnectSession,
+    reconnectReplacements,
     hibernateSession,
     duplicateSession,
     openNotes,
@@ -367,11 +369,19 @@ export const ServerTabs = ({
             orderSessionIds.some(id => !currentSessionIds.includes(id));
 
         if (sessionsChanged) {
-            const newOrder = [];
+            const replacements = reconnectReplacements?.current;
+            const oldToNew = new Map();
+            if (replacements?.size) {
+                for (const [newId, oldId] of replacements) {
+                    if (currentSessionIds.includes(newId)) {
+                        oldToNew.set(oldId, newId);
+                        replacements.delete(newId);
+                    }
+                }
+            }
 
-            tabOrder.forEach(sessionId => {
-                if (currentSessionIds.includes(sessionId)) newOrder.push(sessionId);
-            });
+            let newOrder = tabOrder.map(sessionId => oldToNew.get(sessionId) ?? sessionId)
+                .filter(sessionId => currentSessionIds.includes(sessionId));
 
             currentSessionIds.forEach(sessionId => {
                 if (!newOrder.includes(sessionId)) newOrder.push(sessionId);
@@ -556,6 +566,7 @@ export const ServerTabs = ({
                          onSplitSession={onSplitSession} onPopOut={popOutSession}
                          onOpenNotes={openNotes} onDuplicate={duplicateSession}
                          onHibernate={hibernateSession} onCloseSession={closeSession}
+                         onReconnect={reconnectSession}
                          groups={sessionGroups}
                          onCreateGroup={createGroupFrom}
                          onMoveToGroup={moveSessionToGroup}

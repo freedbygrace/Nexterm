@@ -14,12 +14,19 @@ import FilePreviewWindow from "@/common/components/FilePreviewWindow";
 import { useSessionLayout } from "@/pages/Servers/components/ViewContainer/hooks/useSessionLayout.js";
 import { useActiveSessions } from "@/common/contexts/SessionContext.jsx";
 import { useLiveSessions } from "@/common/contexts/LiveSessionContext.jsx";
+import { usePreferences } from "@/common/contexts/PreferencesContext.jsx";
+import { useAutoReconnect } from "@/common/hooks/useAutoReconnect.js";
 import { useLocation, useNavigate } from "react-router-dom";
 import { ServerContext } from "@/common/contexts/ServerContext.jsx";
 import { StateStreamContext, STATE_TYPES } from "@/common/contexts/StateStreamContext.jsx";
 import { isTauri } from "@/common/utils/TauriUtil.js";
 import { getTabId, getBrowserId, requiresIdentity, canConnectWithoutPrompt } from "@/common/utils/ConnectionUtil.js";
 import { postRequest, deleteRequest, patchRequest } from "@/common/utils/RequestUtil";
+
+let reconnectKeySeq = 0;
+// Stable per-tab key that survives the session-id change on each reconnect.
+// Avoids crypto.randomUUID (unavailable in non-secure http contexts, e.g. LAN IP).
+const makeReconnectKey = () => `rk-${Date.now().toString(36)}-${(reconnectKeySeq++).toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
 export const Servers = () => {
 
@@ -42,7 +49,8 @@ export const Servers = () => {
     const { activeSessions, setActiveSessions, activeSessionId, setActiveSessionId, poppedOutSessions, sessionGroups, setSessionGroups } = useActiveSessions();
     const { liveSessions } = useLiveSessions();
     const { getServerById, servers } = useContext(ServerContext);
-    const { registerHandler } = useContext(StateStreamContext);
+    const { registerHandler, isConnected } = useContext(StateStreamContext);
+    const { autoReconnect } = usePreferences();
     const location = useLocation();
     const navigate = useNavigate();
 
@@ -65,10 +73,15 @@ export const Servers = () => {
     const [hibernatedSessions, setHibernatedSessions] = useState([]);
     const closingSessionsRef = useRef(new Set());
     const erroredSessionsRef = useRef(new Map());
+    const reconnectReplacementsRef = useRef(new Map());
+    // new session id -> groupId a reconnected session re-joins, until the server confirms it
+    const pendingGroupAssignmentsRef = useRef(new Map());
+    const autoReconnectRef = useRef(null);
 
     const markSessionErrored = useCallback((sessionId, message) => {
         if (erroredSessionsRef.current.has(sessionId)) return;
         erroredSessionsRef.current.set(sessionId, message);
+        autoReconnectRef.current?.handleSessionErrored(sessionId);
     }, []);
 
     const getSessionError = useCallback((sessionId) => {
@@ -132,7 +145,12 @@ export const Servers = () => {
             const localOnly = prev.filter(s => s.type === "notes" || s.isJoined);
             const merged = activeMapped.map(newSession => {
                 const existing = prevMap.get(newSession.id);
-                return existing ? { ...newSession, scriptId: existing.scriptId || newSession.scriptId, scriptName: existing.scriptName, osName: newSession.osName || existing.osName } : newSession;
+                const reconnectKey = existing?.reconnectKey || makeReconnectKey();
+                if (newSession.groupId) pendingGroupAssignmentsRef.current.delete(newSession.id);
+                const groupId = newSession.groupId ?? pendingGroupAssignmentsRef.current.get(newSession.id) ?? null;
+                return existing
+                    ? { ...newSession, reconnectKey, groupId, scriptId: existing.scriptId || newSession.scriptId, scriptName: existing.scriptName, osName: newSession.osName || existing.osName }
+                    : { ...newSession, reconnectKey, groupId };
             });
             const mergedIds = new Set(merged.map(s => s.id));
             const erroredPinned = prev.filter(s =>
@@ -258,7 +276,7 @@ export const Servers = () => {
     };
 
     const performConnection = async (options, connectionReason = null) => {
-        const { server, identity = null, type = null, directIdentity = null, scriptId = null, scriptName = null, placement = null } = options;
+        const { server, identity = null, type = null, directIdentity = null, scriptId = null, scriptName = null, placement = null, replaceSessionId = null } = options;
         try {
             const payload = {
                 entryId: server.id,
@@ -276,6 +294,9 @@ export const Servers = () => {
             const organization = findOrganizationForServer(server.id, servers);
             const organizationId = organization ? parseInt(organization.id.split("-")[1]) : null;
 
+            const replacedSession = replaceSessionId ? activeSessions.find(s => s.id === replaceSessionId) : null;
+            const reconnectKey = replacedSession?.reconnectKey || makeReconnectKey();
+
             const sessionData = {
                 server,
                 identity: identity?.id,
@@ -285,10 +306,46 @@ export const Servers = () => {
                 organizationName: organization?.name || null,
                 scriptId: scriptId || undefined,
                 scriptName: scriptName || undefined,
+                reconnectKey,
             };
 
-            sessionLayout.placeSession(session.sessionId, placement);
-            setActiveSessions(prevSessions => [...prevSessions, sessionData]);
+            if (replaceSessionId) {
+                const groupId = replacedSession?.groupId ?? null;
+                closingSessionsRef.current.add(replaceSessionId);
+                erroredSessionsRef.current.delete(replaceSessionId);
+                reconnectReplacementsRef.current.set(session.sessionId, replaceSessionId);
+
+                let rejoinGroup = Promise.resolve();
+                if (groupId) {
+                    // Keep the reconnected session in its split-screen group: take over the
+                    // old session's pane and re-join the group server-side before the old
+                    // session is deleted (an emptied group would otherwise be pruned).
+                    sessionData.groupId = groupId;
+                    pendingGroupAssignmentsRef.current.set(session.sessionId, groupId);
+                    sessionLayout.replaceSession(groupId, replaceSessionId, session.sessionId);
+                    rejoinGroup = patchRequest(`/connections/${session.sessionId}/group`, { groupId })
+                        .catch(error => {
+                            console.debug("Failed to re-join session group after reconnect:", error);
+                            setActiveSessions(prev => prev.map(s => s.id === session.sessionId ? { ...s, groupId: null } : s));
+                        })
+                        .finally(() => pendingGroupAssignmentsRef.current.delete(session.sessionId));
+                }
+                rejoinGroup.then(() => deleteRequest(`/connections/${replaceSessionId}`).catch(error => {
+                    console.debug("Old session deletion request failed:", error);
+                }));
+
+                setActiveSessions(prevSessions => {
+                    const withoutNew = prevSessions.filter(s => s.id !== session.sessionId);
+                    const idx = withoutNew.findIndex(s => s.id === replaceSessionId);
+                    if (idx === -1) return [...withoutNew, sessionData];
+                    const next = [...withoutNew];
+                    next.splice(idx, 1, sessionData);
+                    return next;
+                });
+            } else {
+                sessionLayout.placeSession(session.sessionId, placement);
+                setActiveSessions(prevSessions => [...prevSessions, sessionData]);
+            }
             setActiveSessionId(session.sessionId);
         } catch (error) {
             console.error("Failed to create session", error);
@@ -366,6 +423,31 @@ export const Servers = () => {
         }
         disconnectFromServer(sessionId);
     };
+
+    const reconnectSession = (sessionId) => {
+        const session = activeSessions.find(s => s.id === sessionId);
+        if (!session || session.type === "notes" || session.isJoined) return;
+
+        initiateConnection({
+            server: session.server,
+            identity: session.identity ? { id: session.identity } : null,
+            type: session.type ?? null,
+            scriptId: session.scriptId ?? null,
+            scriptName: session.scriptName ?? null,
+            replaceSessionId: sessionId,
+        });
+    };
+
+    const autoReconnectApi = useAutoReconnect({
+        activeSessions,
+        reconnectSession,
+        getSessionError,
+        enabled: autoReconnect,
+        serverConnected: isConnected,
+    });
+    useEffect(() => {
+        autoReconnectRef.current = autoReconnectApi;
+    });
 
     const openNotes = (serverId) => {
         const server = getServerById(serverId);
@@ -653,12 +735,16 @@ export const Servers = () => {
             }
             {visibleSessions.length > 0 &&
                 <ViewContainer activeSessions={visibleSessions} disconnectFromServer={disconnectFromServer}
-                               closeSession={closeSession}
+                               closeSession={closeSession} reconnectSession={reconnectSession}
+                               reconnectReplacements={reconnectReplacementsRef}
                                activeSessionId={activeSessionId} setActiveSessionId={setActiveSessionId}
                                hibernateSession={hibernateSession} duplicateSession={duplicateSession}
                                openNotes={openNotes}
                                markSessionErrored={markSessionErrored}
                                getSessionError={getSessionError}
+                               markSessionConnected={autoReconnectApi.markSessionConnected}
+                               reconnectNow={autoReconnectApi.reconnectNow}
+                               reconnectStates={autoReconnectApi.reconnectStates}
                                setOpenFileEditors={setOpenFileEditors}
                                openTerminalFromFileManager={openTerminalFromFileManager}
                                sessionLayout={sessionLayout}

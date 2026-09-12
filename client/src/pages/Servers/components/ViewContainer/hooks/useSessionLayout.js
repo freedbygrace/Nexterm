@@ -192,6 +192,17 @@ export const useSessionLayout = (activeGroupId = null, onLayoutChange = null) =>
         }
     }, [bump]);
 
+    // Swap a session id inside a group's tree in place (a reconnect replaces a
+    // session with a fresh one) so the pane keeps its position and size.
+    const replaceSession = useCallback((groupId, oldSessionId, newSessionId) => {
+        if (groupId == null || !oldSessionId || !newSessionId || oldSessionId === newSessionId) return;
+        const current = statesRef.current.get(groupId);
+        if (!current?.tree) return;
+        const leaf = findLeafBySession(current.tree, oldSessionId);
+        if (!leaf) return;
+        writeState(groupId, { tree: replaceLeafSession(current.tree, leaf.id, newSessionId), focusedPaneId: current.focusedPaneId });
+    }, []);
+
     const removeGroupState = useCallback((groupId) => {
         hydratedRef.current.delete(groupId);
         if (statesRef.current.delete(groupId)) bump();
@@ -212,6 +223,7 @@ export const useSessionLayout = (activeGroupId = null, onLayoutChange = null) =>
         reconcile,
         rebuildGroup,
         hydrateGroup,
+        replaceSession,
         removeGroupState,
-    }), [version, activeGroupId, current.tree, current.focusedPaneId, splitWithSession, showSessionInPane, showSession, placeSession, splitAll, clearLayout, resizeBranch, reconcile, rebuildGroup, hydrateGroup, removeGroupState]);
+    }), [version, activeGroupId, current.tree, current.focusedPaneId, splitWithSession, showSessionInPane, showSession, placeSession, splitAll, clearLayout, resizeBranch, reconcile, rebuildGroup, hydrateGroup, replaceSession, removeGroupState]);
 };

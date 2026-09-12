@@ -36,6 +36,25 @@ Right-click an entry:
 
 Every session remembers the protocol it was opened with, so hibernated and reconnected sessions keep their renderer.
 
+## Reachability
+
+The status checker probes the port of every enabled protocol through the engine (a plain TCP connect, no login).
+Protocols that share a port are probed once, so SFTP simply follows SSH. The result is shown in the server list:
+
+- Multi-protocol entries colour their protocol chips: accent for reachable, dimmed and struck through for
+  unreachable, neutral while not checked yet. Hovering a chip shows e.g. `RDP: online (checked 2 min ago)`.
+- Single-protocol entries keep the grey icon when offline and get a small green/red dot.
+- The entry counts as online as soon as one protocol answers.
+
+Two switches control the checks:
+
+- **Settings → Monitoring → Enable Status Checker** turns the checker on or off globally (and sets the interval).
+- **Server dialog → Settings → Reachability checks** excludes a single entry (`config.statusCheckEnabled: false`
+  in the API); its status is cleared instead of being shown as offline.
+
+Checks only run while an engine is connected. `GET /api/entries/list` reports the last result as
+`statusDetails: { "checkedAt": "…", "protocols": { "ssh": "online", "rdp": "offline" } }` (`null` when unknown).
+
 ## API
 
 Entries carry a `config.protocols` map next to the legacy `config.protocol` (primary) and `config.port` (primary port),

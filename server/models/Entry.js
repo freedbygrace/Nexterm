@@ -68,19 +68,28 @@ module.exports = db.define("entries", {
         type: Sequelize.JSON,
         allowNull: true,
     },
-}, { 
+    // Per-protocol reachability written by the status checker: { checkedAt, protocols: { ssh: "online", ... } }
+    statusDetails: {
+        type: Sequelize.JSON,
+        allowNull: true,
+    },
+}, {
     freezeTableName: true,
     timestamps: true,
     hooks: {
         afterFind: (entries) => {
-            const parseConfig = (entry) => {
-                if (entry && entry.config && typeof entry.config === 'string') {
+            const parseJsonField = (entry, field) => {
+                if (entry && entry[field] && typeof entry[field] === 'string') {
                     try {
-                        entry.config = JSON.parse(entry.config);
+                        entry[field] = JSON.parse(entry[field]);
                     } catch (e) {
-                        logger.error('Failed to parse Entry config', { entryId: entry.id, error: e.message });
+                        logger.error(`Failed to parse Entry ${field}`, { entryId: entry.id, error: e.message });
                     }
                 }
+            };
+            const parseConfig = (entry) => {
+                parseJsonField(entry, 'config');
+                parseJsonField(entry, 'statusDetails');
             };
             
             if (Array.isArray(entries)) {

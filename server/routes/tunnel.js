@@ -7,11 +7,14 @@ const controlPlane = require("../lib/controlPlane/ControlPlaneServer");
 const { buildSSHParams, resolveJumpHosts } = require("../lib/ConnectionService");
 const { hasResourcePermission } = require("../utils/permission");
 const { Permission } = require("../permissions/registry");
-const { isProtocolEnabled } = require("../utils/entryProtocols");
+const { isProtocolEnabled, getProtocolPort } = require("../utils/entryProtocols");
 
 module.exports = async (ws, req) => {
     const context = await wsAuth(ws, req);
     if (!context) return;
+
+    // Share links and organization joins never grant port forwarding.
+    if (context.isShared || !context.user) return ws.close(4015, "Port forwarding is not available in shared sessions");
 
     const { entry, identity, user } = context;
 
@@ -56,7 +59,7 @@ module.exports = async (ws, req) => {
             ? identity.directCredentials : await getIdentityCredentials(identity.id);
 
         const host = entry.config?.ip;
-        const port = entry.config?.port || 22;
+        const port = entry.type === "server" ? getProtocolPort(entry, "ssh") : (entry.config?.port || 22);
         if (!host) {
             ws.close(4004, "Missing host configuration");
             return;

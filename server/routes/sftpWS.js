@@ -170,6 +170,9 @@ module.exports = async (ws, req) => {
     const ctx = await wsAuth(ws, req);
     if (!ctx) return;
 
+    // Share links and organization joins only ever grant terminal/desktop access, never files.
+    if (ctx.isShared || !ctx.user) return ws.close(4015, "File access is not available in shared sessions");
+
     const { entry, user, ipAddress, userAgent, serverSession } = ctx;
 
     const [canView, canModify] = await Promise.all([

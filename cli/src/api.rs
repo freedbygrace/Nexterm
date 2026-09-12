@@ -63,7 +63,7 @@ impl Entry {
 
     pub fn is_terminal(&self) -> bool {
         match self {
-            Self::Server { renderer, .. } => renderer.as_deref() != Some("rdp") && renderer.as_deref() != Some("vnc"),
+            Self::Server { renderer, .. } => !matches!(renderer.as_deref(), Some("guac") | Some("sftp")),
             Self::PveLxc { .. } | Self::PveShell { .. } => true,
             _ => false,
         }

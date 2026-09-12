@@ -4,6 +4,7 @@ const { PROTOCOLS } = require("../utils/entryProtocols");
 const protocolEntryValidation = Joi.object({
     enabled: Joi.boolean().required(),
     port: Joi.alternatives().try(Joi.string(), Joi.number()).optional(),
+    identityId: Joi.number().integer().allow(null).optional(),
 });
 
 const configValidation = Joi.object({

@@ -17,7 +17,7 @@ const { sendWakeOnLan } = require("../utils/wol");
 const { reorderSiblings } = require("../utils/reposition");
 const stateBroadcaster = require("../lib/StateBroadcaster");
 const SessionManager = require("../lib/SessionManager");
-const { PROTOCOL_RENDERERS, normalizeServerConfig, isProtocolEnabled, getEnabledProtocols, getProtocolPort } = require("../utils/entryProtocols");
+const { PROTOCOL_RENDERERS, normalizeServerConfig, isProtocolEnabled, getEnabledProtocols, getProtocolPort, getProtocolIdentities } = require("../utils/entryProtocols");
 
 const validateEntryAccess = async (accountId, entry, errorMessage = "You don't have permission to access this entry", requiredPermission = null) => {
     if (!entry) return { code: 401, message: "Entry does not exist" };
@@ -421,6 +421,7 @@ module.exports.listEntries = async (accountId) => {
                 identities: identities,
                 protocol: entry.config?.protocol,
                 protocols: getEnabledProtocols(entry),
+                protocolIdentities: getProtocolIdentities(entry),
                 ip: entry.config?.ip,
                 port: entry.config?.protocol ? getProtocolPort(entry, entry.config.protocol) : entry.config?.port,
                 macAddress: entry.config?.macAddress,

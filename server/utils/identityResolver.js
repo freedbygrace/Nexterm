@@ -2,7 +2,7 @@ const Identity = require('../models/Identity');
 const EntryIdentity = require('../models/EntryIdentity');
 const { listIdentities } = require('../controllers/identity');
 
-const { CREDENTIALLESS_PROTOCOLS, getPrimaryProtocol } = require('./entryProtocols');
+const { CREDENTIALLESS_PROTOCOLS, getPrimaryProtocol, getProtocolIdentityId } = require('./entryProtocols');
 
 /**
  * @param {string|null} protocol - the protocol the session will use; defaults to the entry's primary protocol.
@@ -42,6 +42,15 @@ const resolveIdentity = async (entry, identityId, directIdentity = null, account
         where: { entryId: entry.id },
         order: [['isDefault', 'DESC']]
     });
+
+    // A protocol may name its own default identity (e.g. the Windows account for RDP); it must still be
+    // attached to the entry and accessible to the caller, otherwise the entry default applies.
+    const protocolIdentityId = getProtocolIdentityId(entry, effectiveProtocol);
+    if (protocolIdentityId && entryIdentities.some(ei => ei.identityId === protocolIdentityId)
+        && (!accessibleIds || accessibleIds.has(protocolIdentityId))) {
+        const identity = await Identity.findByPk(protocolIdentityId);
+        if (identity) return identity;
+    }
 
     for (const ei of entryIdentities) {
         if (accessibleIds && !accessibleIds.has(ei.identityId)) continue;

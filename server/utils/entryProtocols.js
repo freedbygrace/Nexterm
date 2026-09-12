@@ -74,6 +74,9 @@ const getProtocolMap = (entryOrConfig) => {
             const enabled = typeof value === "object" ? Boolean(value.enabled) : Boolean(value);
             const port = parsePort(typeof value === "object" ? value.port : undefined, DEFAULT_PORTS[protocol]);
             map[protocol] = { enabled, port };
+            // Optional default identity for this protocol (e.g. a Windows account for RDP on a Linux host).
+            const identityId = typeof value === "object" ? Number.parseInt(value.identityId, 10) : NaN;
+            if (Number.isInteger(identityId) && identityId > 0) map[protocol].identityId = identityId;
         }
     }
 
@@ -103,6 +106,19 @@ const getEnabledProtocols = (entryOrConfig) => {
 };
 
 const isProtocolEnabled = (entryOrConfig, protocol) => Boolean(getProtocolMap(entryOrConfig)[protocol]?.enabled);
+
+/** Default identity configured for a protocol on the entry, or null. */
+const getProtocolIdentityId = (entryOrConfig, protocol) => getProtocolMap(entryOrConfig)[protocol]?.identityId || null;
+
+/** `{ rdp: 5, ssh: 3 }` for every enabled protocol that has a default identity. */
+const getProtocolIdentities = (entryOrConfig) => {
+    const map = getProtocolMap(entryOrConfig);
+    const result = {};
+    for (const protocol of PROTOCOLS) {
+        if (map[protocol]?.enabled && map[protocol].identityId) result[protocol] = map[protocol].identityId;
+    }
+    return result;
+};
 
 /** Primary protocol of an entry (for non-server entries this is the entry type, e.g. "pve-qemu"). */
 const getPrimaryProtocol = (entry) => {
@@ -171,6 +187,7 @@ const normalizeServerConfig = (config, { type = "server" } = {}) => {
     for (const protocol of PROTOCOLS) {
         if (!map[protocol]) continue;
         protocols[protocol] = { enabled: Boolean(map[protocol].enabled), port: map[protocol].port };
+        if (map[protocol].identityId) protocols[protocol].identityId = map[protocol].identityId;
     }
 
     const enabled = PROTOCOLS.filter(p => protocols[p]?.enabled);
@@ -201,6 +218,8 @@ module.exports = {
     getProtocolMap,
     getEnabledProtocols,
     isProtocolEnabled,
+    getProtocolIdentityId,
+    getProtocolIdentities,
     getPrimaryProtocol,
     getProtocolPort,
     resolveSessionProtocol,

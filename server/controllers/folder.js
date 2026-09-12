@@ -4,7 +4,7 @@ const EntryIdentity = require("../models/EntryIdentity");
 const Identity = require("../models/Identity");
 const Organization = require("../models/Organization");
 const OrganizationMember = require("../models/OrganizationMember");
-const { Op } = require("sequelize");
+const { Op, fn, col, where: sqlWhere } = require("sequelize");
 const { hasOrganizationAccess, hasOrganizationPermission, hasAccountPermission } = require("../utils/permission");
 const { Permission } = require("../permissions/registry");
 const { createAuditLog, AUDIT_ACTIONS, RESOURCE_TYPES } = require("./audit");
@@ -86,6 +86,65 @@ const updateFolderContext = async (folderId, organizationId, accountId, oldOrgan
     }
 };
 
+/**
+ * Finds a folder by name (case-insensitive) among the direct children of `parentId` within the given
+ * scope (organization or personal account). Integration-managed folders are ignored.
+ */
+const findSiblingFolder = async (accountId, { name, parentId = null, organizationId = null }) => {
+    return Folder.findOne({
+        where: {
+            parentId: parentId || null,
+            integrationId: null,
+            ...(organizationId ? { organizationId } : { organizationId: null, accountId }),
+            [Op.and]: [sqlWhere(fn("lower", col("name")), String(name).trim().toLowerCase())],
+        },
+        order: [["position", "ASC"], ["id", "ASC"]],
+    });
+};
+
+/**
+ * Splits a folder path ("Prod/Web/EU" or ["Prod", "Web", "EU"]) into trimmed, non-empty segments.
+ */
+const splitFolderPath = (folderPath) => {
+    const segments = Array.isArray(folderPath) ? folderPath : String(folderPath || "").split(/[\/]+/);
+    return segments.map(s => String(s).trim()).filter(Boolean);
+};
+
+/**
+ * Resolves a folder path below `parentId` (or the root of the scope), creating any missing level.
+ * Matching is case-insensitive so API clients never produce duplicate folders.
+ * Returns the deepest folder, or an error object ({ code, message }).
+ */
+module.exports.ensureFolderPath = async (accountId, folderPath, { parentId = null, organizationId = null } = {}) => {
+    const segments = splitFolderPath(folderPath);
+    if (segments.length === 0) {
+        return parentId ? Folder.findByPk(parentId) : null;
+    }
+
+    let currentParentId = parentId || null;
+    let scopeOrganizationId = organizationId || null;
+
+    if (currentParentId) {
+        const parentFolder = await Folder.findByPk(currentParentId);
+        if (!parentFolder) return { code: 302, message: "Parent folder does not exist" };
+        scopeOrganizationId = parentFolder.organizationId || scopeOrganizationId;
+    }
+
+    let folder = null;
+    for (const name of segments) {
+        if (name.length > 50) return { code: 400, message: `Folder name "${name}" is too long (max 50 characters)` };
+
+        folder = await findSiblingFolder(accountId, { name, parentId: currentParentId, organizationId: scopeOrganizationId });
+        if (!folder) {
+            folder = await module.exports.createFolder(accountId, { name, parentId: currentParentId, organizationId: scopeOrganizationId });
+            if (folder?.code) return folder;
+        }
+        currentParentId = folder.id;
+    }
+
+    return folder;
+};
+
 module.exports.createFolder = async (accountId, configuration) => {
     if (configuration.parentId && !configuration.organizationId) {
         const parentFolder = await Folder.findByPk(configuration.parentId);
@@ -120,11 +179,20 @@ module.exports.createFolder = async (accountId, configuration) => {
         }
     }
 
-    const folder = await Folder.create({
+    // Never create a second folder with the same (case-insensitive) name next to an existing one;
+    // return the existing folder instead so scripted imports stay idempotent.
+    const existing = await findSiblingFolder(accountId, {
         name: configuration.name,
+        parentId: configuration.parentId || null,
+        organizationId: configuration.organizationId || null,
+    });
+    if (existing) return existing;
+
+    const folder = await Folder.create({
+        name: configuration.name.trim(),
         accountId: configuration.organizationId ? null : accountId,
         organizationId: configuration.organizationId || null,
-        parentId: configuration.parentId,
+        parentId: configuration.parentId || null,
     });
 
     await createAuditLog({

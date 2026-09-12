@@ -4,7 +4,7 @@ const Folder = require("../models/Folder");
 const EntryTag = require("../models/EntryTag");
 const Tag = require("../models/Tag");
 const AuditLog = require("../models/AuditLog");
-const { listFolders } = require("./folder");
+const { listFolders, ensureFolderPath } = require("./folder");
 const { hasOrganizationAccess, hasOrganizationPermission, hasAccountPermission, validateFolderAccess } = require("../utils/permission");
 const { Permission } = require("../permissions/registry");
 const { Op } = require("sequelize");
@@ -95,7 +95,32 @@ const validateJumpHosts = async (accountId, jumpHosts) => {
     return { valid: true };
 };
 
+/**
+ * Turns an optional `folderPath` ("Prod/Web", case-insensitive, created on demand) into `folderId`.
+ * When both are given the path is resolved below `folderId`.
+ */
+const resolveFolderPath = async (accountId, configuration) => {
+    if (configuration.folderPath === undefined || configuration.folderPath === null) return null;
+
+    const folderPath = configuration.folderPath;
+    delete configuration.folderPath;
+
+    const result = await ensureFolderPath(accountId, folderPath, {
+        parentId: configuration.folderId || null,
+        organizationId: configuration.organizationId || null,
+    });
+    if (result?.code) return result;
+    if (result) {
+        configuration.folderId = result.id;
+        if (result.organizationId) configuration.organizationId = result.organizationId;
+    }
+    return null;
+};
+
 module.exports.createEntry = async (accountId, configuration) => {
+    const pathError = await resolveFolderPath(accountId, configuration);
+    if (pathError) return pathError;
+
     let folder = null;
     if (configuration.folderId) {
         folder = await validateFolderAccess(accountId, configuration.folderId, Permission.RESOURCES_MANAGE);
@@ -202,6 +227,18 @@ module.exports.editEntry = async (accountId, entryId, configuration) => {
     const accessCheck = await validateEntryAccess(accountId, entry, "You don't have permission to edit this entry", Permission.RESOURCES_MANAGE);
 
     if (!accessCheck.valid) return accessCheck;
+
+    if (configuration.folderPath !== undefined) {
+        const scoped = {
+            folderPath: configuration.folderPath,
+            folderId: configuration.folderId,
+            organizationId: configuration.organizationId ?? entry.organizationId,
+        };
+        const pathError = await resolveFolderPath(accountId, scoped);
+        if (pathError) return pathError;
+        delete configuration.folderPath;
+        if (scoped.folderId !== undefined) configuration.folderId = scoped.folderId;
+    }
 
     if (configuration.folderId !== undefined && configuration.folderId !== null) {
         const folderCheck = await validateFolderAccess(accountId, configuration.folderId, Permission.RESOURCES_MANAGE);

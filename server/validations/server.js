@@ -25,6 +25,10 @@ const configValidation = Joi.object({
 module.exports.createServerValidation = Joi.object({
     name: Joi.string().required(),
     folderId: Joi.number().allow(null).optional(),
+    folderPath: Joi.alternatives().try(
+        Joi.string().max(1000),
+        Joi.array().items(Joi.string().min(1).max(50)).max(20),
+    ).optional(),
     organizationId: Joi.number().allow(null).optional(),
     icon: Joi.string().optional(),
     type: Joi.string().valid("server").optional().default("server"),
@@ -36,6 +40,10 @@ module.exports.createServerValidation = Joi.object({
 module.exports.updateServerValidation = Joi.object({
     name: Joi.string().optional(),
     folderId: Joi.number().allow(null).optional(),
+    folderPath: Joi.alternatives().try(
+        Joi.string().max(1000),
+        Joi.array().items(Joi.string().min(1).max(50)).max(20),
+    ).optional(),
     organizationId: Joi.number().allow(null).optional(),
     icon: Joi.string().optional(),
     type: Joi.string().valid("server", "pve-shell", "pve-lxc", "pve-qemu").optional(),

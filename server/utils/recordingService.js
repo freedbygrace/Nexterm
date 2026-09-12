@@ -48,6 +48,33 @@ const getRecordingInfo = (id) => {
     return { exists: false, type: null, path: null };
 };
 
+// Streams a stored recording. Playback (default) uses transparent gzip so browsers hand the player the
+// decoded asciicast / Guacamole stream; download=true sends the raw .gz file as an attachment.
+const sendRecording = (res, { path: filePath, type, fileName }, { download = false } = {}) => {
+    const disposition = `filename="${fileName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`;
+    res.setHeader("X-Recording-Type", type);
+    res.setHeader("Cache-Control", "private, no-store");
+
+    if (download) {
+        res.setHeader("Content-Type", "application/gzip");
+        res.setHeader("Content-Length", fs.statSync(filePath).size);
+        res.setHeader("Content-Disposition", `attachment; ${disposition}`);
+    } else {
+        res.setHeader("Content-Type", type === "cast" ? "application/json" : "application/octet-stream");
+        res.setHeader("Content-Encoding", "gzip");
+        res.setHeader("Content-Disposition", `inline; ${disposition}`);
+    }
+
+    const stream = fs.createReadStream(filePath);
+    stream.on("error", (error) => {
+        logger.error("Error streaming recording file", { path: filePath, error: error.message });
+        if (!res.headersSent) res.status(500).json({ message: "Failed to stream recording" });
+        else res.destroy();
+    });
+    res.on("close", () => stream.destroy());
+    stream.pipe(res);
+};
+
 const deleteRecording = (id) => {
     [getRecordingPath(id, "guac", true), getRecordingPath(id, "cast", true), getGuacdRecordingPath(id)]
         .forEach(p => { try { fs.existsSync(p) && fs.unlinkSync(p); } catch {} });
@@ -153,6 +180,6 @@ const stop = () => {
 
 module.exports = {
     RECORDINGS_DIR, ensureRecordingsDir, getRecordingPath, getGuacdRecordingPath,
-    compressRecording, finalizeGuacRecording, getRecordingInfo, deleteRecording,
+    compressRecording, finalizeGuacRecording, getRecordingInfo, sendRecording, deleteRecording,
     getRetentionDays, isRecordingEnabled, cleanupOldRecordings, start, stop,
 };

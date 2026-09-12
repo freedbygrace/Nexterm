@@ -11,6 +11,7 @@ const { Permission } = require("../permissions/registry");
 const { Op } = require("sequelize");
 const logger = require("../utils/logger");
 const { getRecordingInfo } = require("../utils/recordingService");
+const { createRecordingShareToken, verifyRecordingShareToken } = require("../utils/recordingShare");
 const { normalizeIp } = require("../utils/ip");
 
 const RESOURCE_CONFIG = {
@@ -60,6 +61,9 @@ const AUDIT_ACTIONS = {
     AI_FILE_RENAME: "ai.file_rename",
     AI_FILE_CHMOD: "ai.file_chmod",
     AI_FOLDER_CREATE: "ai.folder_create",
+
+    RECORDING_DOWNLOAD: "recording.download",
+    RECORDING_SHARE: "recording.share",
 };
 
 const RESOURCE_TYPES = {
@@ -109,6 +113,9 @@ const ACTION_LABELS = {
     "ai.file_rename": "AI moved / renamed a path",
     "ai.file_chmod": "AI changed permissions",
     "ai.folder_create": "AI created a folder",
+
+    "recording.download": "Session recording downloaded",
+    "recording.share": "Session recording share link created",
 };
 
 const ACTION_CATEGORIES = [
@@ -119,6 +126,7 @@ const ACTION_CATEGORIES = [
     { key: "identity", label: "Identities", description: "Identity records and credential access" },
     { key: "script", label: "Scripts", description: "Script execution" },
     { key: "ai", label: "AI Assistant", description: "Actions performed by the AI assistant on a server" },
+    { key: "recording", label: "Recordings", description: "Session recording downloads and share links" },
 ];
 
 const RESOURCE_LABELS = {
@@ -369,27 +377,96 @@ module.exports.getOrganizationAuditSettingsInternal = async (organizationId) => 
     }
 };
 
+const sanitizeFileNamePart = (value) => String(value || "").trim().replaceAll(/[^\w.-]+/g, "-").replaceAll(/^-+|-+$/g, "").substring(0, 80);
+
+const buildRecordingFileName = async (auditLog, type) => {
+    let entryName = auditLog.details?.name || null;
+    if (auditLog.resource === RESOURCE_TYPES.ENTRY && auditLog.resourceId) {
+        const entry = await Entry.findByPk(auditLog.resourceId, { attributes: ["name"] });
+        if (entry?.name) entryName = entry.name;
+    }
+
+    const timestamp = auditLog.timestamp instanceof Date ? auditLog.timestamp : new Date(auditLog.timestamp);
+    const date = Number.isNaN(timestamp.getTime()) ? "unknown-date"
+        : timestamp.toISOString().slice(0, 19).replace("T", "_").replaceAll(":", "-");
+
+    return `${sanitizeFileNamePart(entryName) || `recording-${auditLog.id}`}-${date}.${type}.gz`;
+};
+
+const canAccessRecording = async (accountId, auditLog) => auditLog.organizationId
+    ? hasOrganizationPermission(accountId, auditLog.organizationId, Permission.ORG_AUDIT_RECORDINGS)
+    : auditLog.accountId === accountId;
+
+const resolveRecordingFile = async (auditLog) => {
+    const recordingInfo = getRecordingInfo(auditLog.id);
+    if (!recordingInfo.exists) return { code: 404, message: "Recording not found" };
+
+    return {
+        type: recordingInfo.type, path: recordingInfo.path,
+        fileName: await buildRecordingFileName(auditLog, recordingInfo.type), auditLog,
+    };
+};
+
+const logRecordingAccess = (req, auditLog, action, details = {}) => createAuditLog({
+    accountId: req.user.id, organizationId: auditLog.organizationId, action,
+    resource: auditLog.resource, resourceId: auditLog.resourceId,
+    details: {
+        recordingAuditLogId: auditLog.id, name: auditLog.details?.name,
+        recordingType: auditLog.details?.recordingType, ...details,
+    },
+    ipAddress: req.ip, userAgent: req.headers["user-agent"],
+});
+
 module.exports.getRecording = async (accountId, auditLogId) => {
     try {
         const auditLog = await AuditLog.findByPk(auditLogId);
         if (!auditLog) return { code: 404, message: "Audit log not found" };
 
-        if (auditLog.organizationId) {
-            if (!(await hasOrganizationPermission(accountId, auditLog.organizationId, Permission.ORG_AUDIT_RECORDINGS)))
-                return { code: 403, message: "You don't have access to this recording" };
-        } else if (auditLog.accountId !== accountId) {
+        if (!(await canAccessRecording(accountId, auditLog)))
             return { code: 403, message: "You don't have access to this recording" };
-        }
 
-        const recordingInfo = getRecordingInfo(auditLogId);
-        if (!recordingInfo.exists) return { code: 404, message: "Recording not found" };
-
-        return { type: recordingInfo.type, path: recordingInfo.path };
+        return await resolveRecordingFile(auditLog);
     } catch (error) {
         logger.error("Error getting recording", { error: error.message, auditLogId });
         return { code: 500, message: "Failed to retrieve recording" };
     }
 };
+
+module.exports.getSharedRecording = async (token) => {
+    try {
+        const verified = verifyRecordingShareToken(token);
+        if (!verified.valid) {
+            return verified.reason === "expired"
+                ? { code: 410, message: "This share link has expired" }
+                : { code: 404, message: "Recording not found" };
+        }
+
+        const auditLog = await AuditLog.findByPk(verified.auditLogId);
+        if (!auditLog) return { code: 404, message: "Recording not found" };
+
+        return await resolveRecordingFile(auditLog);
+    } catch (error) {
+        logger.error("Error getting shared recording", { error: error.message });
+        return { code: 500, message: "Failed to retrieve recording" };
+    }
+};
+
+module.exports.createRecordingShare = async (req, auditLogId, expiresIn) => {
+    try {
+        const recording = await module.exports.getRecording(req.user.id, auditLogId);
+        if (recording.code) return recording;
+
+        const { token, expiresAt } = createRecordingShareToken(auditLogId, expiresIn);
+        await logRecordingAccess(req, recording.auditLog, AUDIT_ACTIONS.RECORDING_SHARE, { expiresAt: expiresAt.toISOString() });
+
+        return { token, expiresAt };
+    } catch (error) {
+        logger.error("Error creating recording share link", { error: error.message, auditLogId });
+        return { code: 500, message: "Failed to create share link" };
+    }
+};
+
+module.exports.logRecordingAccess = logRecordingAccess;
 
 module.exports.createAuditLog = createAuditLog;
 module.exports.isConnectionReasonRequired = async (organizationId) => {

@@ -54,6 +54,29 @@
       justify-content: center
       flex-shrink: 0
 
+    &--identity
+      width: 7.5rem
+      flex-shrink: 0
+
+  &__identity
+    width: 100%
+    box-sizing: border-box
+    padding: 0.4rem 0.5rem
+    border: 1px solid colors.$gray
+    background-color: colors.$lighter-background
+    color: colors.$white
+    border-radius: 0.5rem
+    font-size: 0.8rem
+    outline: none
+    cursor: pointer
+
+    &:focus
+      border-color: colors.$primary
+
+    &:disabled
+      opacity: 0.4
+      cursor: not-allowed
+
   &__label
     color: colors.$subtext
     font-weight: 600

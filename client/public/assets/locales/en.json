@@ -1690,7 +1690,9 @@
         "noProtocolEnabled": "Enable at least one protocol for this server"
       },
       "protocols": {
+        "defaultIdentity": "Entry default",
         "hint": "All enabled protocols share the host above. The primary protocol is used by the default Connect action.",
+        "identity": "Identity",
         "noneEnabled": "Enable at least one protocol to connect to this host.",
         "port": "Port",
         "primary": "Primary"

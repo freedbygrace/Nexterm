@@ -382,10 +382,16 @@ export const ServerList = ({
     const createPVEServer = () => { setFolderContext(); setProxmoxDialogOpen(); };
     const openSSHConfigImport = () => { setFolderContext(); setSSHConfigImportDialogOpen(); };
 
-    const getIdentity = (id = null) => identities?.find(i => i.id === (id || server?.identities[0]));
-    const connect = (id = null, protocol = null) => connectToServer(server?.id, getIdentity(id), undefined, null, protocol);
-    const connectSFTP = (id = null) => openSFTP(server?.id, getIdentity(id));
-    const openBrowserSession = (id = null) => openBrowser(server?.id, getIdentity(id));
+    // Explicit identity > the protocol's configured default > the entry's first identity.
+    const getIdentity = (id = null, protocol = null) => {
+        const protocolKey = protocol || (server ? getPrimaryProtocol(server) : null);
+        const defaultId = server?.protocolIdentities?.[protocolKey];
+        const targetId = id || (defaultId && server?.identities?.includes(defaultId) ? defaultId : server?.identities?.[0]);
+        return identities?.find(i => i.id === targetId);
+    };
+    const connect = (id = null, protocol = null) => connectToServer(server?.id, getIdentity(id, protocol), undefined, null, protocol);
+    const connectSFTP = (id = null) => openSFTP(server?.id, getIdentity(id, "sftp"));
+    const openBrowserSession = (id = null) => openBrowser(server?.id, getIdentity(id, "ssh"));
 
     // Protocols of the right-clicked server other than its primary one ("Connect via ...").
     const primaryProtocol = server ? getPrimaryProtocol(server) : null;
@@ -395,7 +401,7 @@ export const ServerList = ({
     const protocolIcon = (protocol) => GUAC_PROTOCOLS.includes(protocol) ? mdiMonitor
         : FILE_PROTOCOLS.includes(protocol) ? mdiFolderNetwork : mdiConsole;
     const connectVia = (protocol, id = null) => {
-        if (FILE_PROTOCOLS.includes(protocol)) return openSFTP(server?.id, getIdentity(id), protocol);
+        if (FILE_PROTOCOLS.includes(protocol)) return openSFTP(server?.id, getIdentity(id, protocol), protocol);
         return connect(id, protocol);
     };
 

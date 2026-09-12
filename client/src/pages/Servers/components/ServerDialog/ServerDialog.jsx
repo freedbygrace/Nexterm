@@ -41,7 +41,7 @@ export const ServerDialog = ({ open, onClose, currentFolderId, currentOrganizati
     const { t } = useTranslation();
 
     const { loadServers } = useContext(ServerContext);
-    const { loadIdentities } = useContext(IdentityContext);
+    const { loadIdentities, identities: allIdentities } = useContext(IdentityContext);
     const { sendToast } = useToast();
 
     const getProtocolIcon = (protocol, type) => {
@@ -349,6 +349,12 @@ export const ServerDialog = ({ open, onClose, currentFolderId, currentOrganizati
         getRequest("servers/" + editServerId).then((server) => setIdentities(server.identities));
     };
 
+    // Saved identities linked to this entry (unsaved ones have no id yet), for per-protocol defaults.
+    const linkedIdentityOptions = useMemo(() => (identities || [])
+        .map(id => (allIdentities || []).find(identity => identity.id === id))
+        .filter(Boolean)
+        .map(identity => ({ id: identity.id, name: identity.name })), [identities, allIdentities]);
+
     const isDirty = name !== initialValues.current.name ||
                      icon !== initialValues.current.icon ||
                      JSON.stringify(config) !== initialValues.current.config ||
@@ -416,7 +422,8 @@ export const ServerDialog = ({ open, onClose, currentFolderId, currentOrganizati
                     {activeTab === 0 && <DetailsPage name={name} setName={setName}
                                                      icon={icon} setIcon={setIcon}
                                                      config={config} setConfig={setConfig}
-                                                     fieldConfig={fieldConfig} entryType={entryType} />}
+                                                     fieldConfig={fieldConfig} entryType={entryType}
+                                                     identityOptions={linkedIdentityOptions} />}
                     {activeTab === 1 && tabs[1]?.key === "identities" &&
                         <IdentityPage serverIdentities={identities} setIdentityUpdates={setIdentityUpdates}
                                       identityUpdates={identityUpdates} setIdentities={setIdentities}

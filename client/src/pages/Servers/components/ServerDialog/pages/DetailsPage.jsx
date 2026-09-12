@@ -7,7 +7,7 @@ import { useTranslation } from "react-i18next";
 import { useEffect, useState } from "react";
 import { getRequest } from "@/common/utils/RequestUtil.js";
 
-const DetailsPage = ({name, setName, icon, setIcon, config, setConfig, fieldConfig, entryType = "server"}) => {
+const DetailsPage = ({name, setName, icon, setIcon, config, setConfig, fieldConfig, entryType = "server", identityOptions = []}) => {
     const { t } = useTranslation();
     const [engines, setEngines] = useState([]);
 
@@ -60,7 +60,7 @@ const DetailsPage = ({name, setName, icon, setIcon, config, setConfig, fieldConf
                             </div>
                             <div className="form-group">
                                 <label>{t("servers.dialog.fields.protocols")}</label>
-                                <ProtocolSelector config={config} setConfig={setConfig} />
+                                <ProtocolSelector config={config} setConfig={setConfig} identityOptions={identityOptions} />
                             </div>
                         </>
                     ) : (

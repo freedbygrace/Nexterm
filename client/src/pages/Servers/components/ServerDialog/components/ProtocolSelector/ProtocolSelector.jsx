@@ -22,8 +22,13 @@ const syncPrimary = (config) => {
     return { ...config, protocol: primary, port: getProtocolPortFromConfig(config, primary) };
 };
 
-export const ProtocolSelector = ({ config, setConfig }) => {
+/**
+ * @param {Array<{id:number,name:string}>} identityOptions - identities linked to the entry; when there are
+ *        at least two, each enabled protocol can pick its own default identity.
+ */
+export const ProtocolSelector = ({ config, setConfig, identityOptions = [] }) => {
     const { t } = useTranslation();
+    const showIdentityColumn = identityOptions.length > 1;
 
     const enabledProtocols = getEnabledProtocolsFromConfig(config);
     const primaryProtocol = enabledProtocols.includes(config?.protocol) ? config.protocol : enabledProtocols[0];
@@ -32,7 +37,7 @@ export const ProtocolSelector = ({ config, setConfig }) => {
         setConfig(prev => {
             const map = { ...(prev.protocols || {}) };
             const port = map[protocol]?.port ?? getProtocolPortFromConfig(prev, protocol) ?? DEFAULT_PORTS[protocol];
-            map[protocol] = { enabled: checked, port };
+            map[protocol] = { ...(map[protocol] || {}), enabled: checked, port };
 
             if (protocol === "ssh" && checked && map.sftp === undefined) {
                 map.sftp = { enabled: true, port };
@@ -63,10 +68,24 @@ export const ProtocolSelector = ({ config, setConfig }) => {
         setConfig(prev => ({ ...prev, protocol, port: getProtocolPortFromConfig(prev, protocol) }));
     };
 
+    const changeIdentity = (protocol, value) => {
+        setConfig(prev => {
+            const map = { ...(prev.protocols || {}) };
+            const entry = { ...(map[protocol] || { enabled: true, port: DEFAULT_PORTS[protocol] }) };
+            if (value) entry.identityId = Number.parseInt(value, 10);
+            else delete entry.identityId;
+            map[protocol] = entry;
+            return { ...prev, protocols: map };
+        });
+    };
+
     return (
         <div className="protocol-selector">
             <div className="protocol-selector__header">
                 <span className="protocol-selector__column protocol-selector__column--name" />
+                {showIdentityColumn && (
+                    <span className="protocol-selector__column protocol-selector__column--identity">{t("servers.dialog.protocols.identity")}</span>
+                )}
                 <span className="protocol-selector__column protocol-selector__column--port">{t("servers.dialog.protocols.port")}</span>
                 <span className="protocol-selector__column protocol-selector__column--primary">{t("servers.dialog.protocols.primary")}</span>
             </div>
@@ -86,6 +105,20 @@ export const ProtocolSelector = ({ config, setConfig }) => {
                                       onChange={(checked) => toggleProtocol(protocol, checked)} />
                             <label htmlFor={checkboxId} className="protocol-selector__label">{label}</label>
                         </div>
+
+                        {showIdentityColumn && (
+                            <div className="protocol-selector__column protocol-selector__column--identity">
+                                <select className="protocol-selector__identity" disabled={!enabled}
+                                        aria-label={`${label} ${t("servers.dialog.protocols.identity")}`}
+                                        value={enabled ? String(config?.protocols?.[protocol]?.identityId ?? "") : ""}
+                                        onChange={(event) => changeIdentity(protocol, event.target.value)}>
+                                    <option value="">{t("servers.dialog.protocols.defaultIdentity")}</option>
+                                    {identityOptions.map(identity => (
+                                        <option key={identity.id} value={String(identity.id)}>{identity.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
 
                         <div className="protocol-selector__column protocol-selector__column--port">
                             <input type="text" inputMode="numeric" className="protocol-selector__port"

@@ -171,7 +171,7 @@ const SettingsPage = ({ config, setConfig, monitoringEnabled, setMonitoringEnabl
         return availableJumpHosts.filter(server => !selectedIds.includes(server.id));
     };
 
-    const showJumpHosts = config?.protocol === 'ssh';
+    const showJumpHosts = ['ssh', 'rdp', 'vnc'].includes(config?.protocol);
     const showTelnetAutoLogin = config?.protocol === 'telnet';
 
     if (!fieldConfig.showMonitoring && !fieldConfig.showKeyboardLayout && !fieldConfig.showDisplaySettings && !fieldConfig.showAudioSettings && !fieldConfig.showWakeOnLan && !fieldConfig.showTerminalSettings && !showJumpHosts && !showTelnetAutoLogin) {

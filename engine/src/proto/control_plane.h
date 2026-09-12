@@ -58,6 +58,14 @@ int nexterm_cp_send_session_result_meta(nexterm_control_plane_t* cp,
                                         const char* connection_id,
                                         const char* metadata);
 
+int nexterm_cp_send_session_result_ex(nexterm_control_plane_t* cp,
+                                      const char* session_id,
+                                      bool success,
+                                      const char* error_message,
+                                      const char* connection_id,
+                                      const char* metadata,
+                                      uint16_t local_port);
+
 int nexterm_cp_send_session_closed(nexterm_control_plane_t* cp,
                                     const char* session_id,
                                     const char* reason);

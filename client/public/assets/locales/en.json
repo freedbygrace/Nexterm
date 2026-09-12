@@ -1867,6 +1867,10 @@
     "fileManager": {
       "dropOverlay": "Drop files or folders to upload",
       "dropOverlayHint": "Drop here to upload into {{directory}}, or onto a folder or breadcrumb to upload there",
+      "upload": {
+        "status": "Uploading {{count}} file(s) · {{percent}}%",
+        "cancel": "Cancel upload"
+      },
       "createFile": {
         "title": "Create File",
         "placeholder": "File Name",
@@ -2008,6 +2012,7 @@
         "uploadFailed": "Upload failed: {{message}}",
         "uploadFailedItems": "{{count}} files failed to upload: {{message}}",
         "uploadSkipped": "{{count}} dropped item(s) could not be read and were skipped",
+        "uploadCancelled": "Upload cancelled after {{count}} file(s)",
         "connectionLost": "SFTP connection lost. Please reconnect.",
         "error": "An error occurred"
       }

@@ -8,7 +8,7 @@ import ActionBar from "@/pages/Servers/components/ViewContainer/renderer/FileRen
 import FileList from "@/pages/Servers/components/ViewContainer/renderer/FileRenderer/components/FileList";
 import "./styles.sass";
 import Icon from "@mdi/react";
-import { mdiCloudUpload } from "@mdi/js";
+import { mdiCloudUpload, mdiClose } from "@mdi/js";
 import { getWebSocketUrl, getBaseUrl } from "@/common/utils/ConnectionUtil.js";
 import { uploadFile as uploadFileRequest, tauriDownload } from "@/common/utils/RequestUtil.js";
 import { isTauri } from "@/common/utils/TauriUtil.js";
@@ -24,7 +24,10 @@ const REFRESH_DEBOUNCE = 150;
 
 const joinPath = (...parts) => parts.join("/").replace(/\/+/g, "/");
 
-const createUploadStats = () => ({ uploaded: 0, failed: 0, sentBytes: 0, totalBytes: 0, firstError: null, lastName: "" });
+const createUploadStats = () => ({ uploaded: 0, failed: 0, cancelled: 0, sentBytes: 0, totalBytes: 0, firstError: null, lastName: "" });
+
+/** Files uploaded at the same time; keeps many small files fast without flooding the SFTP link. */
+const UPLOAD_CONCURRENCY = 3;
 
 const readAllEntries = (reader) => new Promise((resolve, reject) => {
     const all = [];
@@ -99,6 +102,7 @@ export const FileRenderer = ({ session, disconnectFromServer, setOpenFileEditors
     const [dragging, setDragging] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
     const [isUploading, setIsUploading] = useState(false);
+    const [uploadRemaining, setUploadRemaining] = useState(0);
     const [directory, setDirectory] = useState("/");
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -119,6 +123,9 @@ export const FileRenderer = ({ session, disconnectFromServer, setOpenFileEditors
     const symlinkCallbacks = useRef([]);
     const dropZoneRef = useRef(null);
     const uploadQueueRef = useRef([]);
+    const uploadRunningRef = useRef(false);
+    const uploadAbortRef = useRef(null);
+    const uploadInFlightRef = useRef(new Map());
     const reconnectAttemptsRef = useRef(0);
     const fileListRef = useRef(null);
     const propertiesHandlerRef = useRef(null);
@@ -181,30 +188,52 @@ export const FileRenderer = ({ session, disconnectFromServer, setOpenFileEditors
         sendToast(t("common.success"), t("servers.fileManager.toast.downloadingItems", { count: paths.length }));
     };
 
-    const uploadFileHttp = async (file, targetDir) => {
+    const refreshUploadProgress = () => {
+        const stats = uploadStatsRef.current;
+        let inFlight = 0;
+        for (const bytes of uploadInFlightRef.current.values()) inFlight += bytes;
+        setUploadProgress(stats.totalBytes ? Math.min(100, Math.round(((stats.sentBytes + inFlight) / stats.totalBytes) * 100)) : 0);
+        setUploadRemaining(uploadQueueRef.current.length + uploadInFlightRef.current.size);
+    };
+
+    const uploadFileHttp = async (file, targetDir, signal) => {
         const filePath = joinPath(targetDir, file.name);
         const stats = uploadStatsRef.current;
+        uploadInFlightRef.current.set(file, 0);
+        refreshUploadProgress();
 
         try {
             const url = `/api/entries/sftp/upload?sessionId=${session.id}&path=${encodeURIComponent(filePath)}&sessionToken=${sessionToken}`;
             await uploadFileRequest(url, file, {
-                onProgress: (progress) => setUploadProgress(stats.totalBytes
-                    ? Math.round(((stats.sentBytes + (progress / 100) * file.size) / stats.totalBytes) * 100)
-                    : progress),
+                onProgress: (progress) => {
+                    uploadInFlightRef.current.set(file, (progress / 100) * file.size);
+                    refreshUploadProgress();
+                },
                 timeout: 5 * 60 * 1000,
+                signal,
             });
             stats.uploaded++;
             stats.lastName = file.name;
         } catch (err) {
-            console.error("Upload error:", err);
-            stats.failed++;
-            stats.firstError ??= err.message;
+            if (signal?.aborted || err.message === "Upload cancelled") {
+                stats.cancelled++;
+            } else {
+                console.error("Upload error:", err);
+                stats.failed++;
+                stats.firstError ??= err.message;
+            }
         } finally {
+            uploadInFlightRef.current.delete(file);
             stats.sentBytes += file.size;
+            refreshUploadProgress();
         }
     };
 
-    const reportUploadResult = ({ uploaded, failed, firstError, lastName }) => {
+    const reportUploadResult = ({ uploaded, failed, cancelled, firstError, lastName }) => {
+        if (cancelled) {
+            sendToast(t("common.error"), t("servers.fileManager.toast.uploadCancelled", { count: uploaded }));
+            return;
+        }
         if (uploaded) {
             sendToast(t("common.success"), uploaded === 1
                 ? t("servers.fileManager.toast.uploaded", { name: lastName })
@@ -218,14 +247,33 @@ export const FileRenderer = ({ session, disconnectFromServer, setOpenFileEditors
     };
 
     const processUploadQueue = async () => {
+        if (uploadRunningRef.current) return;
+        uploadRunningRef.current = true;
+        const controller = new AbortController();
+        uploadAbortRef.current = controller;
         setIsUploading(true);
-        while (uploadQueueRef.current.length > 0) {
-            const { file, targetDir } = uploadQueueRef.current[0];
-            await uploadFileHttp(file, targetDir);
-            uploadQueueRef.current.shift();
+
+        // A small pool of workers drains the queue; each picks the next file when it is done.
+        const worker = async () => {
+            while (uploadQueueRef.current.length > 0 && !controller.signal.aborted) {
+                const { file, targetDir } = uploadQueueRef.current.shift();
+                await uploadFileHttp(file, targetDir, controller.signal);
+            }
+        };
+        // Files discovered while the pool was draining (streamed folder walks) must not be stranded.
+        do {
+            await Promise.all(Array.from({ length: UPLOAD_CONCURRENCY }, worker));
+        } while (uploadQueueRef.current.length > 0 && !controller.signal.aborted);
+
+        if (controller.signal.aborted) {
+            uploadStatsRef.current.cancelled += uploadQueueRef.current.length;
+            uploadQueueRef.current = [];
         }
+        uploadRunningRef.current = false;
+        uploadAbortRef.current = null;
         setIsUploading(false);
         setUploadProgress(0);
+        setUploadRemaining(0);
         listFiles(true);
 
         const stats = uploadStatsRef.current;
@@ -233,13 +281,19 @@ export const FileRenderer = ({ session, disconnectFromServer, setOpenFileEditors
         reportUploadResult(stats);
     };
 
+    const cancelUploads = () => {
+        uploadQueueRef.current = [];
+        uploadAbortRef.current?.abort();
+    };
+
     const queueUploads = (uploads) => {
         if (!uploads.length) return;
-        const idle = uploadQueueRef.current.length === 0;
         for (const upload of uploads) uploadStatsRef.current.totalBytes += upload.file.size;
         uploadQueueRef.current.push(...uploads);
-        if (idle) processUploadQueue();
+        refreshUploadProgress();
+        processUploadQueue();
     };
+
 
     const uploadFile = async () => {
         const fileInput = document.createElement("input");
@@ -483,7 +537,18 @@ export const FileRenderer = ({ session, disconnectFromServer, setOpenFileEditors
                     searchQuery={searchQuery} onSearchResults={setSearchResultCount}
                     onOpenTerminal={onOpenTerminal} onPropertiesMessage={(handler) => { propertiesHandlerRef.current = handler; }} />
             </div>
-            {isUploading && <div className="upload-progress" style={{ width: `${uploadProgress}%` }} />}
+            {isUploading && (
+                <>
+                    <div className="upload-status">
+                        <span>{t("servers.fileManager.upload.status", { count: uploadRemaining, percent: uploadProgress })}</span>
+                        <button type="button" className="upload-cancel" onClick={cancelUploads}
+                                title={t("servers.fileManager.upload.cancel")} aria-label={t("servers.fileManager.upload.cancel")}>
+                            <Icon path={mdiClose} />
+                        </button>
+                    </div>
+                    <div className="upload-progress" style={{ width: `${uploadProgress}%` }} />
+                </>
+            )}
         </div>
     );
 };

@@ -53,19 +53,27 @@ export const tauriFetch = async (url, options = {}) => {
     return fetch(url, options);
 };
 
-export const uploadFile = async (url, file, { onProgress, timeout = 300000, headers = {} } = {}) => {
+/**
+ * Uploads one file. Pass an AbortSignal as `signal` to cancel; the promise then rejects with
+ * "Upload cancelled".
+ */
+export const uploadFile = async (url, file, { onProgress, timeout = 300000, headers = {}, signal } = {}) => {
     const baseUrl = getBaseUrl();
     const fullUrl = baseUrl ? `${baseUrl}${url}` : url;
+
+    if (signal?.aborted) throw new Error("Upload cancelled");
 
     if (isTauri()) {
         try {
             const userAgent = await getTauriUserAgent();
             const arrayBuffer = await file.arrayBuffer();
             
+            if (signal?.aborted) throw new Error("Upload cancelled");
             const response = await tauriFetchApi(fullUrl, {
                 method: "POST",
                 headers: { "Content-Type": "application/octet-stream", "User-Agent": userAgent, ...headers },
                 body: arrayBuffer,
+                signal,
             });
 
             if (onProgress) onProgress(100);
@@ -80,13 +88,18 @@ export const uploadFile = async (url, file, { onProgress, timeout = 300000, head
             const text = await response.text();
             try { return JSON.parse(text); } catch { return { success: true }; }
         } catch (e) {
-            if (e.message?.includes("Upload failed")) throw e;
+            if (e.message?.includes("Upload failed") || e.message === "Upload cancelled" || signal?.aborted) throw e;
             console.warn("Tauri upload failed, trying XHR fallback:", e);
         }
     }
 
     return new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
+        if (signal) {
+            const onAbort = () => xhr.abort();
+            signal.addEventListener("abort", onAbort, { once: true });
+            xhr.addEventListener("loadend", () => signal.removeEventListener("abort", onAbort));
+        }
         
         if (onProgress) {
             xhr.upload.addEventListener("progress", (e) => {

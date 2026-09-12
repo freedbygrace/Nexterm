@@ -1,6 +1,6 @@
 const { Router } = require("express");
-const { createEntry, deleteEntry, editEntry, getEntry, listEntries, duplicateEntry, importSSHConfig, repositionEntry, getRecentConnections, wakeEntry } = require("../controllers/entry");
-const { createServerValidation, updateServerValidation, repositionServerValidation } = require("../validations/server");
+const { createEntry, deleteEntry, editEntry, getEntry, listEntries, duplicateEntry, importSSHConfig, bulkImportEntries, repositionEntry, getRecentConnections, wakeEntry } = require("../controllers/entry");
+const { createServerValidation, updateServerValidation, repositionServerValidation, bulkImportValidation } = require("../validations/server");
 const { validateSchema } = require("../utils/schema");
 
 const app = Router();
@@ -140,6 +140,29 @@ app.post("/:entryId/duplicate", async (req, res) => {
  */
 app.post("/import/ssh-config", async (req, res) => {
     const result = await importSSHConfig(req.user.id, req.body);
+    if (result?.code) return res.json(result);
+
+    res.json(result);
+});
+
+/**
+ * POST /entry/import/bulk
+ * @summary Bulk Import Entries
+ * @description Creates many server entries at once. Each row names the host, the protocols it offers (as a list or a
+ * map with per-protocol ports and identities), an optional folder path below the target folder, identities by id or
+ * name and tags by name. Rows whose name already exists in the target folder are skipped unless updateExisting is set.
+ * With dryRun the request is only validated and resolved; nothing is written.
+ * @tags Entry
+ * @produces application/json
+ * @security BearerAuth
+ * @param {object} request.body.required - { entries: [...], folderId?, organizationId?, dryRun?, updateExisting? }
+ * @return {object} 200 - Per-row results and counters
+ * @return {object} 400 - Invalid request envelope
+ */
+app.post("/import/bulk", async (req, res) => {
+    if (validateSchema(res, bulkImportValidation, req.body)) return;
+
+    const result = await bulkImportEntries(req.user.id, req.body);
     if (result?.code) return res.json(result);
 
     res.json(result);

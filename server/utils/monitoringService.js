@@ -94,6 +94,79 @@ const COMMANDS = {
     ifaceDetails: IFACE_DETAIL_CMD,
 };
 
+// Windows hosts are polled with PowerShell over SSH. Scripts are passed via -EncodedCommand so they
+// work regardless of whether the remote default shell is cmd.exe or PowerShell (no quoting issues).
+const powershell = (script) =>
+    `powershell -NoProfile -NonInteractive -EncodedCommand ${Buffer.from(script, "utf16le").toString("base64")}`;
+
+const WINDOWS_PROBE_ID = "windowsProbe";
+const WINDOWS_PROBE_CMD = powershell("[System.Environment]::OSVersion.Platform");
+
+const WINDOWS_COMMANDS = {
+    cpu: powershell("Get-CimInstance Win32_Processor | Measure-Object -Property LoadPercentage -Average | Select-Object -ExpandProperty Average"),
+    memory: powershell(
+        "$os = Get-CimInstance Win32_OperatingSystem; " +
+        "Write-Output ($os.TotalVisibleMemorySize * 1KB); Write-Output ($os.FreePhysicalMemory * 1KB)",
+    ),
+    uptime: powershell("[int](((Get-Date) - (Get-CimInstance Win32_OperatingSystem).LastBootUpTime).TotalSeconds)"),
+    processCount: powershell("(Get-Process).Count"),
+    processList: powershell(
+        "$total = (Get-CimInstance Win32_OperatingSystem).TotalVisibleMemorySize * 1KB; " +
+        "try { $procs = Get-Process -IncludeUserName -ErrorAction Stop } catch { $procs = Get-Process }; " +
+        "$procs | Sort-Object CPU -Descending | Select-Object -First 50 | ForEach-Object { " +
+        "Write-Output ($_.UserName + '|' + $_.Id + '|' + [math]::Round([double]$_.CPU, 1) + '|' + " +
+        "[math]::Round($_.WorkingSet64 / $total * 100, 1) + '|' + [math]::Round($_.VirtualMemorySize64 / 1KB) + '|' + " +
+        "[math]::Round($_.WorkingSet64 / 1KB) + '|' + $_.ProcessName) }",
+    ),
+    disk: powershell(
+        "Get-CimInstance Win32_LogicalDisk -Filter 'DriveType=3' | ForEach-Object { " +
+        "Write-Output ($_.DeviceID + '|' + $_.Size + '|' + $_.FreeSpace + '|' + $_.FileSystem + '|' + $_.VolumeName) }",
+    ),
+    osInfo: powershell(
+        "$os = Get-CimInstance Win32_OperatingSystem; $cs = Get-CimInstance Win32_ComputerSystem; " +
+        "Write-Output ($os.Caption + '|' + $os.Version + '|' + $os.BuildNumber + '|' + $cs.DNSHostName + '|' + $env:PROCESSOR_ARCHITECTURE)",
+    ),
+    network: powershell(
+        "Get-NetAdapter | Where-Object { $_.Status -eq 'Up' } | ForEach-Object { " +
+        "$s = Get-NetAdapterStatistics -Name $_.Name -ErrorAction SilentlyContinue; " +
+        "$ips = Get-NetIPAddress -InterfaceIndex $_.InterfaceIndex -ErrorAction SilentlyContinue; " +
+        "$v4 = ($ips | Where-Object { $_.AddressFamily -eq 'IPv4' } | ForEach-Object { $_.IPAddress + '/' + $_.PrefixLength }) -join ','; " +
+        "$v6 = ($ips | Where-Object { $_.AddressFamily -eq 'IPv6' } | ForEach-Object { ($_.IPAddress -replace '%.*', '') + '/' + $_.PrefixLength }) -join ','; " +
+        "Write-Output ($_.Name + '|' + $_.MacAddress + '|' + $_.Status + '|' + $_.MtuSize + '|' + $_.Speed + '|' + " +
+        "$s.ReceivedBytes + '|' + $s.SentBytes + '|' + $v4 + '|' + $v6) }",
+    ),
+};
+
+// Detected OS per entry ("linux" | "windows"), so hosts are not re-probed on every poll cycle.
+// Keyed by entry id and validated against host:port so a re-pointed entry is probed again.
+const detectedOS = new Map();
+
+const getCachedOS = (entry, host, port) => {
+    const cached = detectedOS.get(entry.id);
+    return cached && cached.host === host && cached.port === port ? cached.os : null;
+};
+
+// A host is only treated as Windows when PowerShell actually runs and reports the Win32NT platform;
+// anything else (missing powershell, non-zero exit, unexpected output) falls back to the Linux path.
+const isWindowsProbeResult = (result) =>
+    Boolean(result?.success) && result.exitCode === 0 && (result.stdout || "").trim() === "Win32NT";
+
+const execBatch = async (host, port, params, commandMap, jumpHosts, extraCommands = []) => {
+    const commands = Object.entries(commandMap).map(([id, command]) => ({ id, command })).concat(extraCommands);
+    const batch = await controlPlane.execCommandBatch(host, port, params, commands, jumpHosts);
+    if (!batch.success) {
+        throw new Error(batch.errorMessage || "Failed to connect to SSH host");
+    }
+
+    const results = {};
+    const out = {};
+    for (const r of batch.results || []) {
+        results[r.id] = r;
+        out[r.id] = r.success ? (r.stdout || "").trim() : "";
+    }
+    return { results, out };
+};
+
 const collectServerData = async (entry, identity, credentials) => {
     if (!controlPlane.hasEngine()) {
         return { status: "error", timestamp: new Date(), errorMessage: "No engine connected. Monitoring requires the Nexterm Engine." };
@@ -109,35 +182,158 @@ const collectServerData = async (entry, identity, credentials) => {
     const jumpHosts = await resolveJumpHosts(entry);
 
     try {
-        const commands = Object.entries(COMMANDS).map(([id, command]) => ({ id, command }));
-        const batch = await controlPlane.execCommandBatch(host, port, params, commands, jumpHosts);
-        if (!batch.success) {
-            throw new Error(batch.errorMessage || "Failed to connect to SSH host");
+        let os = getCachedOS(entry, host, port);
+        let out;
+
+        if (os !== "windows") {
+            // Linux is the default path. On the first cycle the PowerShell probe rides along in the same
+            // batch, so Linux hosts never pay an extra round-trip for OS detection.
+            const probe = os ? [] : [{ id: WINDOWS_PROBE_ID, command: WINDOWS_PROBE_CMD }];
+            const linux = await execBatch(host, port, params, COMMANDS, jumpHosts, probe);
+            out = linux.out;
+
+            if (!os) {
+                os = isWindowsProbeResult(linux.results[WINDOWS_PROBE_ID]) ? "windows" : "linux";
+                detectedOS.set(entry.id, { host, port, os });
+                logger.verbose("Detected monitoring OS", { entryId: entry.id, host, os });
+            }
         }
 
-        const out = {};
-        for (const r of batch.results || []) {
-            out[r.id] = r.success ? (r.stdout || "").trim() : "";
+        if (os === "windows") {
+            out = (await execBatch(host, port, params, WINDOWS_COMMANDS, jumpHosts)).out;
+            return collectWindowsData(out);
         }
 
-        const memory = parseMemoryUsage(out.memory);
-        return {
-            status: "online",
-            timestamp: new Date(),
-            cpuUsage: parseCPUUsage(out.cpu),
-            memoryUsage: memory.usage,
-            memoryTotal: memory.total,
-            disk: parseDiskUsage(out.lsblk, out.df),
-            uptime: parseUptime(out.uptime),
-            loadAverage: parseLoadAverage(out.loadAverage),
-            processes: parseProcessCount(out.processCount),
-            processList: parseProcessList(out.processList),
-            osInfo: parseOSInfo(out.osRelease, out.kernel, out.arch, out.hostname),
-            network: parseNetworkInterfaces(out.ifaceDetails, out.ipAddr),
-        };
+        return collectLinuxData(out);
     } catch (error) {
+        detectedOS.delete(entry.id);
         logger.error("Error during monitoring data collection", { error: error.message, host });
         return { status: "offline", timestamp: new Date(), errorMessage: error.message };
+    }
+};
+
+const collectLinuxData = (out) => {
+    const memory = parseMemoryUsage(out.memory);
+    return {
+        status: "online",
+        timestamp: new Date(),
+        cpuUsage: parseCPUUsage(out.cpu),
+        memoryUsage: memory.usage,
+        memoryTotal: memory.total,
+        disk: parseDiskUsage(out.lsblk, out.df),
+        uptime: parseUptime(out.uptime),
+        loadAverage: parseLoadAverage(out.loadAverage),
+        processes: parseProcessCount(out.processCount),
+        processList: parseProcessList(out.processList),
+        osInfo: parseOSInfo(out.osRelease, out.kernel, out.arch, out.hostname),
+        network: parseNetworkInterfaces(out.ifaceDetails, out.ipAddr),
+    };
+};
+
+const collectWindowsData = (out) => {
+    const memory = parseWindowsMemoryUsage(out.memory);
+    return {
+        status: "online",
+        timestamp: new Date(),
+        cpuUsage: parseWindowsCPUUsage(out.cpu),
+        memoryUsage: memory.usage,
+        memoryTotal: memory.total,
+        disk: parseWindowsDiskUsage(out.disk),
+        uptime: parseProcessCount(out.uptime),
+        loadAverage: null,
+        processes: parseProcessCount(out.processCount),
+        processList: parseWindowsProcessList(out.processList),
+        osInfo: parseWindowsOSInfo(out.osInfo),
+        network: parseWindowsNetworkInterfaces(out.network),
+    };
+};
+
+const splitLines = (output) => (output || "").split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+
+const parseWindowsCPUUsage = (output) => {
+    try {
+        const value = Math.round(Number.parseFloat(output));
+        return Number.isFinite(value) ? value : null;
+    } catch { return null; }
+};
+
+const parseWindowsMemoryUsage = (output) => {
+    try {
+        const [total, free] = splitLines(output).map(l => Number.parseInt(l, 10));
+        if (!total) return { usage: null, total: null };
+        return { usage: Math.round(((total - free) / total) * 100), total };
+    } catch { return { usage: null, total: null }; }
+};
+
+const parseWindowsDiskUsage = (output) => {
+    try {
+        return splitLines(output).map(line => {
+            const [device, size, free, fs, label] = line.split("|");
+            const sizeBytes = Number.parseInt(size, 10) || 0;
+            const freeBytes = Number.parseInt(free, 10) || 0;
+            const used = Math.max(sizeBytes - freeBytes, 0);
+            return {
+                name: device.replace(":", ""),
+                size: sizeBytes,
+                model: label || null,
+                serial: null,
+                rotational: null,
+                partitions: [{
+                    name: device,
+                    size: sizeBytes,
+                    mountPoint: `${device}\\`,
+                    type: fs || null,
+                    used,
+                    available: freeBytes,
+                    usagePercent: sizeBytes > 0 ? Math.round((used / sizeBytes) * 100) : 0,
+                }],
+            };
+        });
+    } catch { return []; }
+};
+
+const parseWindowsProcessList = (output) => {
+    try {
+        return splitLines(output).map(line => {
+            const p = line.split("|");
+            if (p.length < 7) return null;
+            return {
+                user: p[0] || "SYSTEM", pid: Number.parseInt(p[1], 10) || 0, cpu: Number.parseFloat(p[2]) || 0, mem: Number.parseFloat(p[3]) || 0,
+                vsz: Number.parseInt(p[4], 10) || 0, rss: Number.parseInt(p[5], 10) || 0, tty: "?", stat: "?",
+                start: "", time: "", command: p.slice(6).join("|"),
+            };
+        }).filter(Boolean);
+    } catch { return []; }
+};
+
+const parseWindowsOSInfo = (output) => {
+    try {
+        const [name, version, build, hostname, arch] = (output || "").trim().split("|");
+        return { name: name || "Windows", version: version || "", kernel: build || "", hostname: hostname || "", architecture: arch || "" };
+    } catch { return {}; }
+};
+
+const parseWindowsNetworkInterfaces = (output) => {
+    try {
+        return splitLines(output).map(line => {
+            const [name, mac, state, mtu, speed, rxBytes, txBytes, ipv4, ipv6] = line.split("|");
+            if (!name) return null;
+            const speedBits = Number.parseInt(speed, 10);
+            return {
+                name,
+                ipv4: ipv4 ? ipv4.split(",").filter(Boolean) : [],
+                ipv6: ipv6 ? ipv6.split(",").filter(Boolean) : [],
+                rxBytes: Number.parseInt(rxBytes, 10) || 0,
+                txBytes: Number.parseInt(txBytes, 10) || 0,
+                mac: mac ? mac.replaceAll("-", ":").toLowerCase() : null,
+                state: state ? state.toLowerCase() : null,
+                mtu: Number.parseInt(mtu, 10) || null,
+                speed: speedBits > 0 ? Math.round(speedBits / 1000000) : null,
+            };
+        }).filter(Boolean);
+    } catch (error) {
+        logger.error("Error getting Windows network interfaces", { error: error.message });
+        return [];
     }
 };
 

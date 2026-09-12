@@ -53,12 +53,11 @@ fn print_tree(entries: &[&Entry], depth: usize) {
             print_tree(&refs, depth + 1);
         } else {
             let id = entry.id_num().unwrap_or(0);
-            let proto = entry.protocol();
+            let proto = protocol_label(entry);
             let ip = entry.ip();
             let tags = format_tags(entry.tags());
-            let ps = match proto {
+            let ps = match entry.terminal_protocol().unwrap_or(entry.protocol()) {
                 "ssh" => style(proto).green(),
-                "telnet" => style(proto).yellow(),
                 _ => style(proto).yellow(),
             };
             println!("{}{} {} [{}] {}{}", indent, style(format!("#{id}")).dim(), style(entry.name()).bold(), ps, style(ip).dim(), tags);
@@ -85,8 +84,13 @@ fn fuzzy_score(query: &str, entries: &[&Entry]) -> Vec<(u16, usize)> {
     scored
 }
 
+/// "ssh" for single-protocol entries, "ssh+rdp" for multi-protocol ones.
+fn protocol_label(e: &Entry) -> String {
+    e.protocols().join("+")
+}
+
 fn entry_label(e: &Entry) -> String {
-    format!("{} [{}] {}", e.name(), e.protocol(), e.ip())
+    format!("{} [{}] {}", e.name(), protocol_label(e), e.ip())
 }
 
 pub async fn search(query: &str, command: Option<&str>) -> Result<()> {

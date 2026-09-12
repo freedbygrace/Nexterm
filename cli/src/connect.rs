@@ -9,28 +9,32 @@ fn get_terminals_and_resolve<'a>(flat: &[&'a crate::api::Entry], target: &str) -
     resolve_entry(flat, target)
 }
 
-async fn setup(target: &str) -> Result<(ApiClient, u64, Option<u64>, String)> {
+struct Target { entry_id: u64, identity_id: Option<u64>, protocol: Option<String>, name: String }
+
+async fn setup(target: &str) -> Result<(ApiClient, Target)> {
     let client = ApiClient::from_config()?;
     let entries = client.list_entries().await?;
     let flat: Vec<&_> = flatten_entries(&entries).into_iter().filter(|e| e.is_terminal()).collect();
     let entry = get_terminals_and_resolve(&flat, target)?;
     let entry_id = entry.id_num().ok_or_else(|| anyhow::anyhow!("Invalid entry"))?;
     let identity_id = pick_identity(&client, entry.identities()).await?;
-    Ok((client, entry_id, identity_id, entry.name().to_string()))
+    // Multi-protocol entries may have RDP/VNC as primary; always ask for the terminal protocol.
+    let protocol = entry.terminal_protocol().map(str::to_string);
+    Ok((client, Target { entry_id, identity_id, protocol, name: entry.name().to_string() }))
 }
 
 pub async fn interactive(target: &str) -> Result<()> {
-    let (client, entry_id, identity_id, name) = setup(target).await?;
-    println!("Connecting to {} ...", style(&name).bold().green());
-    let conn = client.create_connection(entry_id, identity_id).await?;
+    let (client, t) = setup(target).await?;
+    println!("Connecting to {} ...", style(&t.name).bold().green());
+    let conn = client.create_connection(t.entry_id, t.identity_id, t.protocol.as_deref()).await?;
     terminal::run_session(&client.ws_url(&conn.session_id)?).await?;
     println!("Connection closed.");
     Ok(())
 }
 
 pub async fn exec(target: &str, command: &str) -> Result<()> {
-    let (client, entry_id, identity_id, _) = setup(target).await?;
-    let resp = client.exec_command(entry_id, identity_id, command).await?;
+    let (client, t) = setup(target).await?;
+    let resp = client.exec_command(t.entry_id, t.identity_id, command).await?;
     if let Some(stdout) = &resp.stdout { if !stdout.is_empty() { print!("{stdout}"); } }
     if let Some(stderr) = &resp.stderr { if !stderr.is_empty() { eprint!("{stderr}"); } }
     let exit_code = resp.exit_code.unwrap_or(if resp.success { 0 } else { 1 });

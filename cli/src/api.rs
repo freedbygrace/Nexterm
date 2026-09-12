@@ -29,6 +29,8 @@ pub enum Entry {
         id: u64, name: String,
         #[serde(default)] renderer: Option<String>,
         #[serde(default)] protocol: Option<String>,
+        /// Every protocol enabled on the entry (primary first); absent on older servers.
+        #[serde(default)] protocols: Option<Vec<String>>,
         #[serde(default)] ip: Option<String>,
         #[serde(default)] identities: Option<Vec<u64>>,
         #[serde(default)] tags: Option<Vec<Tag>>,
@@ -61,9 +63,32 @@ impl Entry {
         }
     }
 
+    /// Enabled protocols of a server entry, falling back to the primary one for older servers.
+    pub fn protocols(&self) -> Vec<&str> {
+        match self {
+            Self::Server { protocols: Some(list), .. } if !list.is_empty() => list.iter().map(String::as_str).collect(),
+            Self::Server { .. } => vec![self.protocol()],
+            _ => vec![self.protocol()],
+        }
+    }
+
+    /// The protocol the CLI can open a terminal over (SSH preferred, then Telnet), if any.
+    pub fn terminal_protocol(&self) -> Option<&str> {
+        match self {
+            Self::Server { .. } => {
+                let list = self.protocols();
+                if list.contains(&"ssh") { Some("ssh") }
+                else if list.contains(&"telnet") { Some("telnet") }
+                else { None }
+            }
+            Self::PveLxc { .. } | Self::PveShell { .. } => None,
+            _ => None,
+        }
+    }
+
     pub fn is_terminal(&self) -> bool {
         match self {
-            Self::Server { renderer, .. } => !matches!(renderer.as_deref(), Some("guac") | Some("sftp")),
+            Self::Server { .. } => self.terminal_protocol().is_some(),
             Self::PveLxc { .. } | Self::PveShell { .. } => true,
             _ => false,
         }
@@ -194,10 +219,13 @@ impl ApiClient {
     pub async fn list_entries(&self) -> Result<Vec<Entry>> { self.get_authed("/entries/list").await }
     pub async fn list_identities(&self) -> Result<Vec<Identity>> { self.get_authed("/identities/list").await }
 
-    pub async fn create_connection(&self, entry_id: u64, identity_id: Option<u64>) -> Result<CreateConnectionResponse> {
+    /// `protocol` selects which enabled protocol of a multi-protocol entry to open (None = primary).
+    pub async fn create_connection(&self, entry_id: u64, identity_id: Option<u64>, protocol: Option<&str>) -> Result<CreateConnectionResponse> {
+        let mut body = serde_json::json!({"entryId": entry_id, "identityId": identity_id});
+        if let Some(p) = protocol { body["type"] = serde_json::Value::String(p.to_string()); }
         let resp = self.client.post(self.url("/connections"))
             .header("Authorization", self.auth()?)
-            .json(&serde_json::json!({"entryId": entry_id, "identityId": identity_id}))
+            .json(&body)
             .send().await?;
         if !resp.status().is_success() { bail!("Failed to create connection: {}", resp.status()); }
         Ok(resp.json().await?)

@@ -112,3 +112,22 @@ jobs:
           flutter pub get
           # the codebase carries a few style lints; only real errors fail the build
           flutter analyze --no-fatal-infos --no-fatal-warnings
+
+  engine-image:
+    name: "Engine image (build only)"
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      # Compiles the C engine against the vendored guacamole-server exactly like a release would,
+      # without pushing anything.
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.engine
+          platforms: linux/amd64
+          push: false
+          cache-from: type=gha,scope=dev-engine
+          cache-to: type=gha,mode=max,scope=dev-engine

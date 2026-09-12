@@ -1,7 +1,7 @@
 const { Router } = require("express");
 const { validateSchema } = require("../utils/schema");
-const { createSnippet, deleteSnippet, editSnippet, getSnippet, listAllAccessibleSnippets, listAllSourceSnippets, repositionSnippet } = require("../controllers/snippet");
-const { snippetCreationValidation, snippetEditValidation, snippetRepositionValidation } = require("../validations/snippet");
+const { createSnippet, deleteSnippet, duplicateSnippet, editSnippet, getSnippet, listAllAccessibleSnippets, listAllSourceSnippets, repositionSnippet } = require("../controllers/snippet");
+const { snippetCreationValidation, snippetDuplicateValidation, snippetEditValidation, snippetRepositionValidation } = require("../validations/snippet");
 const OrganizationMember = require("../models/OrganizationMember");
 const { hasOrganizationAccess } = require("../utils/permission");
 
@@ -166,6 +166,39 @@ app.patch("/:snippetId/reposition", async (req, res) => {
     if (result?.code) return res.status(result.code).json(result);
 
     res.json({ message: "Snippet repositioned successfully" });
+});
+
+/**
+ * POST /snippet/{snippetId}/duplicate
+ * @summary Duplicate Snippet
+ * @description Creates an editable copy of a snippet placed right after the original. The copy keeps the original's scope unless a target organizationId is given in the body.
+ * @tags Snippet
+ * @produces application/json
+ * @security BearerAuth
+ * @param {string} snippetId.path.required - The unique identifier of the snippet to duplicate
+ * @param {string} organizationId.query - Optional: Organization ID if duplicating an organization snippet
+ * @param {object} request.body - Optional overrides: name, organizationId (target scope, null for personal)
+ * @return {object} 200 - The newly created snippet
+ * @return {object} 403 - Missing permission for the target scope
+ * @return {object} 404 - Snippet not found
+ */
+app.post("/:snippetId/duplicate", async (req, res) => {
+    if (validateSchema(res, snippetDuplicateValidation, req.body)) return;
+
+    const organizationId = req.query.organizationId ? parseInt(req.query.organizationId) : null;
+
+    if (organizationId && !(await hasOrganizationAccess(req.user.id, organizationId))) {
+        return res.status(403).json({ code: 403, message: "Access denied to this organization" });
+    }
+
+    if (req.body.organizationId && !(await hasOrganizationAccess(req.user.id, req.body.organizationId))) {
+        return res.status(403).json({ code: 403, message: "Access denied to this organization" });
+    }
+
+    const snippet = await duplicateSnippet(req.user.id, req.params.snippetId, req.body, organizationId);
+    if (snippet?.code) return res.status(snippet.code).json(snippet);
+
+    res.json(snippet);
 });
 
 module.exports = app;

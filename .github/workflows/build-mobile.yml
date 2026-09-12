@@ -16,6 +16,8 @@ on:
 jobs:
   build-apk:
     name: "APK (${{ matrix.abi }})"
+    env:
+      HAS_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -45,6 +47,8 @@ jobs:
           channel: "stable"
 
       - name: Setup Android signing
+        # Without a keystore secret the APK is built with the debug key (installable, not store-ready).
+        if: env.HAS_KEYSTORE == 'true'
         run: |
           echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > mobile/android/app/release.keystore
           cat > mobile/android/key.properties << EOF
@@ -84,6 +88,8 @@ jobs:
 
   build-apk-universal:
     name: "APK (Universal)"
+    env:
+      HAS_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
     runs-on: ubuntu-latest
 
     steps:
@@ -103,6 +109,8 @@ jobs:
           channel: "stable"
 
       - name: Setup Android signing
+        # Without a keystore secret the APK is built with the debug key (installable, not store-ready).
+        if: env.HAS_KEYSTORE == 'true'
         run: |
           echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > mobile/android/app/release.keystore
           cat > mobile/android/key.properties << EOF

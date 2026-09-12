@@ -4,6 +4,13 @@ on:
   push:
     tags: ["v*"]
 
+# Everything below runs with the repository's GITHUB_TOKEN: release assets, the version-bump
+# commit on main and the GHCR images need no additional secrets. Signing (Android keystore,
+# Tauri updater key) and the APT/RPM mirror are optional and skipped when not configured.
+permissions:
+  contents: write
+  packages: write
+
 jobs:
   create-release:
     name: "Create Release"
@@ -110,6 +117,8 @@ jobs:
   deploy-repo:
     name: "Deploy repository"
     needs: [create-release, finalize-release]
+    # Buildkite Packages is upstream infrastructure; forks publish .deb/.rpm as release assets only.
+    if: github.repository == 'gnmyt/Nexterm'
     uses: ./.github/workflows/deploy-repo.yml
     with:
       version: ${{ needs.create-release.outputs.version }}

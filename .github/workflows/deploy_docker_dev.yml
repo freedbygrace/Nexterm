@@ -1,8 +1,13 @@
-name: Deploy Development Release to DockerHub
+name: Deploy Development Images
 
 on:
   push:
     branches: [ "main" ]
+
+# Pushes ghcr.io/<owner>/nexterm/{server,engine,aio}:development for every commit on main.
+permissions:
+  contents: read
+  packages: write
 
 jobs:
   components:
@@ -13,10 +18,8 @@ jobs:
       matrix:
         include:
           - slug: server
-            image: nexterm/server
             dockerfile: Dockerfile.server
           - slug: engine
-            image: nexterm/engine
             dockerfile: Dockerfile.engine
 
     steps:
@@ -28,11 +31,17 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Login to DockerHub
+      - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve image namespace
+        id: img
+        shell: bash
+        run: echo "base=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/nexterm" >> "$GITHUB_OUTPUT"
 
       - name: Build and push
         uses: docker/build-push-action@v6
@@ -41,7 +50,7 @@ jobs:
           file: ${{ matrix.dockerfile }}
           push: true
           platforms: linux/amd64
-          tags: ${{ matrix.image }}:development
+          tags: ${{ steps.img.outputs.base }}/${{ matrix.slug }}:development
           cache-from: type=gha,scope=dev-${{ matrix.slug }}
           cache-to: type=gha,mode=max,scope=dev-${{ matrix.slug }}
 
@@ -57,11 +66,17 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Login to DockerHub
+      - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve image namespace
+        id: img
+        shell: bash
+        run: echo "base=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/nexterm" >> "$GITHUB_OUTPUT"
 
       - name: Build and push
         uses: docker/build-push-action@v6
@@ -70,9 +85,9 @@ jobs:
           file: Dockerfile
           push: true
           platforms: linux/amd64
-          tags: nexterm/aio:development
+          tags: ${{ steps.img.outputs.base }}/aio:development
           build-args: |
-            SERVER_IMAGE=nexterm/server:development
-            ENGINE_IMAGE=nexterm/engine:development
+            SERVER_IMAGE=${{ steps.img.outputs.base }}/server:development
+            ENGINE_IMAGE=${{ steps.img.outputs.base }}/engine:development
           cache-from: type=gha,scope=dev-aio
           cache-to: type=gha,mode=max,scope=dev-aio

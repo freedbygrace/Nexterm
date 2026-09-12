@@ -1,0 +1,106 @@
+name: CI
+
+on:
+  push:
+    branches: ["main", "development"]
+  pull_request:
+    branches: ["main", "development"]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  server:
+    name: "Server"
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install flatc
+        run: |
+          curl -sSL -o /tmp/flatc.zip https://github.com/google/flatbuffers/releases/download/v24.12.23/Linux.flatc.binary.g++-13.zip
+          sudo unzip -o /tmp/flatc.zip -d /usr/local/bin
+          sudo chmod +x /usr/local/bin/flatc
+          flatc --version
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Generate FlatBuffers bindings
+        run: yarn schema:generate
+
+      - name: Syntax-check server sources
+        run: |
+          set -e
+          for f in $(git ls-files 'server/**/*.js' 'server/*.js'); do node --check "$f"; done
+
+      - name: Boot server and run migrations
+        env:
+          ENCRYPTION_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+          SERVER_PORT: "6999"
+        run: |
+          mkdir -p /tmp/nexterm-ci && cd /tmp/nexterm-ci
+          node "$GITHUB_WORKSPACE/server/index.js" > boot.log 2>&1 &
+          PID=$!
+          for i in $(seq 1 90); do
+            if curl -sf -o /dev/null http://127.0.0.1:6999/api/service; then echo "server up after ${i}s"; kill $PID; exit 0; fi
+            if ! kill -0 $PID 2>/dev/null; then echo "server exited early"; cat boot.log; exit 1; fi
+            sleep 2
+          done
+          echo "server did not start"; cat boot.log; kill $PID; exit 1
+
+  client:
+    name: "Client"
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        working-directory: client
+        run: yarn install --frozen-lockfile
+
+      - name: Build
+        working-directory: client
+        run: yarn build
+
+  cli:
+    name: "CLI"
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: cli
+
+      - name: Build
+        working-directory: cli
+        run: cargo build --locked
+
+  mobile:
+    name: "Mobile (analyze)"
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.44.6"
+          channel: "stable"
+
+      - name: Analyze
+        working-directory: mobile
+        run: |
+          flutter pub get
+          flutter analyze --no-fatal-infos

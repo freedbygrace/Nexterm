@@ -7,6 +7,13 @@ on:
         required: true
         type: string
 
+# Images are published to GitHub Container Registry under the repository owner, so the
+# pipeline works on any fork without extra secrets:
+#   ghcr.io/<owner>/nexterm/server, ghcr.io/<owner>/nexterm/engine, ghcr.io/<owner>/nexterm/aio
+permissions:
+  contents: read
+  packages: write
+
 jobs:
   build-components:
     name: "Docker ${{ matrix.slug }} (${{ matrix.platform_arch }})"
@@ -24,10 +31,8 @@ jobs:
             platform: linux/arm64
             runner: ubuntu-24.04-arm
           - slug: server
-            image_name: nexterm/server
             dockerfile: Dockerfile.server
           - slug: engine
-            image_name: nexterm/engine
             dockerfile: Dockerfile.engine
 
     steps:
@@ -39,17 +44,23 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Login to DockerHub
+      - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve image namespace
+        id: img
+        shell: bash
+        run: echo "base=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/nexterm" >> "$GITHUB_OUTPUT"
 
       - name: Docker meta
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ matrix.image_name }}
+          images: ${{ steps.img.outputs.base }}/${{ matrix.slug }}
 
       - name: Build and push by digest
         id: build
@@ -61,7 +72,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             VERSION=${{ inputs.version }}
-          outputs: type=image,name=${{ matrix.image_name }},push-by-digest=true,name-canonical=true,push=true
+          outputs: type=image,name=${{ steps.img.outputs.base }}/${{ matrix.slug }},push-by-digest=true,name-canonical=true,push=true
           cache-from: type=gha,scope=${{ matrix.slug }}-${{ matrix.platform_arch }}
           cache-to: type=gha,mode=max,scope=${{ matrix.slug }}-${{ matrix.platform_arch }}
 
@@ -85,11 +96,7 @@ jobs:
     needs: build-components
     strategy:
       matrix:
-        include:
-          - image: nexterm/server
-            slug: server
-          - image: nexterm/engine
-            slug: engine
+        slug: [server, engine]
 
     steps:
       - name: Download digests
@@ -102,18 +109,25 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Login to DockerHub
+      - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve image namespace
+        id: img
+        shell: bash
+        run: echo "base=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/nexterm" >> "$GITHUB_OUTPUT"
 
       - name: Create manifest list and push
         run: |
+          IMAGE="${{ steps.img.outputs.base }}/${{ matrix.slug }}"
           docker buildx imagetools create \
-            -t ${{ matrix.image }}:latest \
-            -t ${{ matrix.image }}:${{ inputs.version }} \
-            $(printf '${{ matrix.image }}@sha256:%s ' $(ls "${{ runner.temp }}/digests/${{ matrix.slug }}"))
+            -t "$IMAGE:latest" \
+            -t "$IMAGE:${{ inputs.version }}" \
+            $(printf "$IMAGE@sha256:%s " $(ls "${{ runner.temp }}/digests/${{ matrix.slug }}"))
 
   build-aio:
     name: "Docker aio (${{ matrix.platform_arch }})"
@@ -138,17 +152,23 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Login to DockerHub
+      - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve image namespace
+        id: img
+        shell: bash
+        run: echo "base=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/nexterm" >> "$GITHUB_OUTPUT"
 
       - name: Docker meta
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: nexterm/aio
+          images: ${{ steps.img.outputs.base }}/aio
 
       - name: Build and push by digest
         id: build
@@ -159,9 +179,9 @@ jobs:
           platforms: ${{ matrix.platform }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            SERVER_IMAGE=nexterm/server:${{ inputs.version }}
-            ENGINE_IMAGE=nexterm/engine:${{ inputs.version }}
-          outputs: type=image,name=nexterm/aio,push-by-digest=true,name-canonical=true,push=true
+            SERVER_IMAGE=${{ steps.img.outputs.base }}/server:${{ inputs.version }}
+            ENGINE_IMAGE=${{ steps.img.outputs.base }}/engine:${{ inputs.version }}
+          outputs: type=image,name=${{ steps.img.outputs.base }}/aio,push-by-digest=true,name-canonical=true,push=true
           cache-from: type=gha,scope=aio-${{ matrix.platform_arch }}
           cache-to: type=gha,mode=max,scope=aio-${{ matrix.platform_arch }}
 
@@ -195,15 +215,22 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Login to DockerHub
+      - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve image namespace
+        id: img
+        shell: bash
+        run: echo "base=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/nexterm" >> "$GITHUB_OUTPUT"
 
       - name: Create manifest list and push
         run: |
+          IMAGE="${{ steps.img.outputs.base }}/aio"
           docker buildx imagetools create \
-            -t nexterm/aio:latest \
-            -t nexterm/aio:${{ inputs.version }} \
-            $(printf 'nexterm/aio@sha256:%s ' $(ls "${{ runner.temp }}/digests/aio"))
+            -t "$IMAGE:latest" \
+            -t "$IMAGE:${{ inputs.version }}" \
+            $(printf "$IMAGE@sha256:%s " $(ls "${{ runner.temp }}/digests/aio"))

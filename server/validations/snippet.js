@@ -18,3 +18,8 @@ module.exports.snippetEditValidation = Joi.object({
 module.exports.snippetRepositionValidation = Joi.object({
     targetId: Joi.number().integer().required(),
 });
+
+module.exports.snippetDuplicateValidation = Joi.object({
+    name: Joi.string().min(1).max(255),
+    organizationId: Joi.number().integer().allow(null),
+});

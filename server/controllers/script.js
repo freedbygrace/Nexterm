@@ -2,6 +2,7 @@ const Script = require("../models/Script");
 const { Op } = require("sequelize");
 const { hasResourcePermission } = require("../utils/permission");
 const { Permission } = require("../permissions/registry");
+const { nextCopyName } = require("../utils/duplicate");
 
 const getWhereClause = (id, accountId, organizationId) => organizationId
     ? { id, organizationId }
@@ -10,20 +11,64 @@ const getWhereClause = (id, accountId, organizationId) => organizationId
 const canManage = (accountId, organizationId) =>
     hasResourcePermission(accountId, organizationId, Permission.SCRIPTS_MANAGE);
 
+const getScopeWhere = (accountId, organizationId) => organizationId
+    ? { organizationId }
+    : { accountId, organizationId: null, sourceId: null };
+
+const listScopeOrdered = (accountId, organizationId) =>
+    Script.findAll({ where: getScopeWhere(accountId, organizationId), order: [['sortOrder', 'ASC'], ['id', 'ASC']] });
+
+const renumber = (all) =>
+    Promise.all(all.map((s, i) => Script.update({ sortOrder: i + 1 }, { where: { id: s.id } })));
+
 module.exports.createScript = async (accountId, configuration) => {
     if (!(await canManage(accountId, configuration.organizationId)))
         return { code: 403, message: "You don't have permission to manage scripts" };
 
     const maxSortOrder = await Script.max('sortOrder', {
-        where: configuration.organizationId 
-            ? { organizationId: configuration.organizationId }
-            : { accountId, organizationId: null, sourceId: null }
+        where: getScopeWhere(accountId, configuration.organizationId)
     }) || 0;
-    return Script.create({ 
-        ...configuration, 
+    return Script.create({
+        ...configuration,
         accountId: configuration.organizationId ? null : accountId,
-        sortOrder: maxSortOrder + 1 
+        sortOrder: maxSortOrder + 1
     });
+};
+
+module.exports.duplicateScript = async (accountId, scriptId, { name, organizationId: targetOrganizationId } = {}, organizationId = null) => {
+    const original = await Script.findOne({
+        where: {
+            [Op.or]: [getWhereClause(scriptId, accountId, organizationId), { id: scriptId, sourceId: { [Op.ne]: null } }],
+        },
+    });
+    if (!original) return { code: 404, message: "Script does not exist" };
+
+    const targetOrgId = targetOrganizationId === undefined ? original.organizationId : (targetOrganizationId || null);
+    if (!(await canManage(accountId, targetOrgId)))
+        return { code: 403, message: "You don't have permission to manage scripts" };
+
+    const siblings = await listScopeOrdered(accountId, targetOrgId);
+    const copyName = name || nextCopyName(original.name, siblings.map(s => s.name));
+
+    const copy = await Script.create({
+        name: copyName,
+        content: original.content,
+        description: original.description,
+        osFilter: original.osFilter,
+        organizationId: targetOrgId,
+        accountId: targetOrgId ? null : accountId,
+        sourceId: null,
+        sortOrder: (siblings[siblings.length - 1]?.sortOrder || 0) + 1,
+    });
+
+    const originalIdx = siblings.findIndex(s => s.id === original.id);
+    if (originalIdx !== -1) {
+        siblings.splice(originalIdx + 1, 0, copy);
+        await renumber(siblings);
+        copy.sortOrder = originalIdx + 2;
+    }
+
+    return copy;
 };
 
 module.exports.deleteScript = async (accountId, scriptId, organizationId = null) => {
@@ -54,15 +99,14 @@ module.exports.repositionScript = async (accountId, scriptId, { targetId }, orga
     if (!script) return { code: 404, message: "Script does not exist" };
     if (script.sourceId) return { code: 403, message: "Cannot reorder source-synced scripts" };
     
-    const where = organizationId ? { organizationId } : { accountId, organizationId: null, sourceId: null };
-    const all = await Script.findAll({ where, order: [['sortOrder', 'ASC'], ['id', 'ASC']] });
-    
+    const all = await listScopeOrdered(accountId, organizationId);
+
     const srcIdx = all.findIndex(s => s.id === parseInt(scriptId));
     const tgtIdx = all.findIndex(s => s.id === parseInt(targetId));
     if (srcIdx === -1 || tgtIdx === -1) return { code: 404, message: "Script not found" };
-    
+
     all.splice(tgtIdx, 0, all.splice(srcIdx, 1)[0]);
-    await Promise.all(all.map((s, i) => Script.update({ sortOrder: i + 1 }, { where: { id: s.id } })));
+    await renumber(all);
     return { success: true };
 };
 
@@ -103,15 +147,12 @@ module.exports.getScript = async (accountId, scriptId, organizationId = null, or
     return { code: 404, message: "Script does not exist" };
 };
 
-module.exports.listScripts = async (accountId, organizationId = null) => {
-    const where = organizationId ? { organizationId } : { accountId, organizationId: null, sourceId: null };
-    return Script.findAll({ where, order: [["sortOrder", "ASC"]] });
-};
+module.exports.listScripts = async (accountId, organizationId = null) =>
+    Script.findAll({ where: getScopeWhere(accountId, organizationId), order: [["sortOrder", "ASC"]] });
 
 module.exports.searchScripts = async (accountId, search, organizationId = null) => {
-    const base = organizationId ? { organizationId } : { accountId, organizationId: null, sourceId: null };
     return Script.findAll({
-        where: { ...base, [Op.or]: [{ name: { [Op.like]: `%${search}%` } }, { description: { [Op.like]: `%${search}%` } }] },
+        where: { ...getScopeWhere(accountId, organizationId), [Op.or]: [{ name: { [Op.like]: `%${search}%` } }, { description: { [Op.like]: `%${search}%` } }] },
         order: [["sortOrder", "ASC"]]
     });
 };

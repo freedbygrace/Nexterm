@@ -4,6 +4,7 @@ const {
     getScript,
     searchScripts,
     createScript,
+    duplicateScript,
     editScript,
     deleteScript,
     listAllAccessibleScripts,
@@ -11,7 +12,7 @@ const {
     repositionScript,
 } = require("../controllers/script");
 const { validateSchema } = require("../utils/schema");
-const { scriptCreationValidation, scriptEditValidation, scriptRepositionValidation } = require("../validations/script");
+const { scriptCreationValidation, scriptDuplicateValidation, scriptEditValidation, scriptRepositionValidation } = require("../validations/script");
 const OrganizationMember = require("../models/OrganizationMember");
 const { hasOrganizationAccess } = require("../utils/permission");
 
@@ -234,6 +235,44 @@ app.patch("/:scriptId/reposition", async (req, res) => {
             return res.status(result.code).json(result);
         }
         res.json({ message: "Script repositioned successfully" });
+    } catch (error) {
+        res.status(500).json({ code: 500, message: error.message });
+    }
+});
+
+/**
+ * POST /scripts/{scriptId}/duplicate
+ * @summary Duplicate Script
+ * @description Creates an editable copy of a script placed right after the original. The copy keeps the original's scope unless a target organizationId is given in the body.
+ * @tags Scripts
+ * @produces application/json
+ * @security BearerAuth
+ * @param {string} scriptId.path.required - The unique identifier of the script to duplicate
+ * @param {string} organizationId.query - Optional: Organization ID if duplicating an organization script
+ * @param {object} request.body - Optional overrides: name, organizationId (target scope, null for personal)
+ * @return {object} 201 - The newly created script
+ * @return {object} 403 - Missing permission for the target scope
+ * @return {object} 404 - Script not found
+ */
+app.post("/:scriptId/duplicate", async (req, res) => {
+    if (validateSchema(res, scriptDuplicateValidation, req.body)) return;
+
+    try {
+        const organizationId = req.query.organizationId ? parseInt(req.query.organizationId) : null;
+
+        if (organizationId && !(await hasOrganizationAccess(req.user.id, organizationId))) {
+            return res.status(403).json({ code: 403, message: "Access denied to this organization" });
+        }
+
+        if (req.body.organizationId && !(await hasOrganizationAccess(req.user.id, req.body.organizationId))) {
+            return res.status(403).json({ code: 403, message: "Access denied to this organization" });
+        }
+
+        const script = await duplicateScript(req.user.id, req.params.scriptId, req.body, organizationId);
+        if (script?.code) {
+            return res.status(script.code).json(script);
+        }
+        res.status(201).json(script);
     } catch (error) {
         res.status(500).json({ code: 500, message: error.message });
     }

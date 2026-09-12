@@ -18,3 +18,8 @@ module.exports.scriptEditValidation = Joi.object({
 module.exports.scriptRepositionValidation = Joi.object({
     targetId: Joi.number().integer().required(),
 });
+
+module.exports.scriptDuplicateValidation = Joi.object({
+    name: Joi.string().min(1).max(255),
+    organizationId: Joi.number().integer().allow(null),
+});

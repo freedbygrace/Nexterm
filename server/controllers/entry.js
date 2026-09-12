@@ -428,6 +428,10 @@ module.exports.listEntries = async (accountId) => {
                 wakeOnLanEnabled: entry.config?.wakeOnLanEnabled,
                 notes: entry.config?.notes || "",
                 showNoteInList: Boolean(entry.config?.showNoteInList),
+                // Per-protocol reachability from the status checker, or null when unknown / checks disabled.
+                statusDetails: entry.statusDetails
+                    ? { checkedAt: entry.statusDetails.checkedAt || null, protocols: entry.statusDetails.protocols || {} }
+                    : null,
             };
         }
 

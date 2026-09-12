@@ -1,4 +1,5 @@
 import { isTauri, getActiveServerUrl } from "@/common/utils/TauriUtil.js";
+import { isCredentiallessProtocol, getPrimaryProtocol } from "@/common/utils/ProtocolUtil.js";
 
 export const getBaseUrl = () => {
     if (isTauri()) {
@@ -43,15 +44,16 @@ export const getBrowserId = () => {
     return id;
 };
 
-const CREDENTIALLESS_PROTOCOLS = ["telnet", "demo"];
+export { isCredentiallessProtocol };
 
-export const isCredentiallessProtocol = (protocol) => CREDENTIALLESS_PROTOCOLS.includes(protocol);
-
-export const requiresIdentity = (server) => {
+/**
+ * Whether connecting to `server` over `protocol` (defaults to the entry's primary protocol) needs an identity.
+ */
+export const requiresIdentity = (server, protocol = null) => {
     if (!server) return false;
     if (server.type?.startsWith("pve-")) return false;
-    return !isCredentiallessProtocol(server.protocol);
+    return !isCredentiallessProtocol(protocol || getPrimaryProtocol(server));
 };
 
-export const canConnectWithoutPrompt = (server) =>
-    !requiresIdentity(server) || server?.identities?.length > 0;
+export const canConnectWithoutPrompt = (server, protocol = null) =>
+    !requiresIdentity(server, protocol) || server?.identities?.length > 0;

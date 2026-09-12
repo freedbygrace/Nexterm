@@ -1,7 +1,14 @@
 const Joi = require("joi");
+const { PROTOCOLS } = require("../utils/entryProtocols");
+
+const protocolEntryValidation = Joi.object({
+    enabled: Joi.boolean().required(),
+    port: Joi.alternatives().try(Joi.string(), Joi.number()).optional(),
+});
 
 const configValidation = Joi.object({
-    protocol: Joi.string().valid("ssh", "telnet", "rdp", "vnc", "sftp", "ftp", "ftps", "demo").optional(),
+    protocol: Joi.string().valid(...PROTOCOLS).optional(),
+    protocols: Joi.object().pattern(Joi.string().valid(...PROTOCOLS), protocolEntryValidation).optional(),
     ip: Joi.string().optional(),
     port: Joi.alternatives().try(Joi.string(), Joi.number()).optional(),
     keyboardLayout: Joi.string().optional(),

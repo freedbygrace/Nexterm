@@ -17,17 +17,7 @@ const { sendWakeOnLan } = require("../utils/wol");
 const { reorderSiblings } = require("../utils/reposition");
 const stateBroadcaster = require("../lib/StateBroadcaster");
 const SessionManager = require("../lib/SessionManager");
-
-const PROTOCOL_RENDERERS = {
-    ssh: "terminal",
-    telnet: "terminal",
-    rdp: "guac",
-    vnc: "guac",
-    demo: "guac",
-    sftp: "sftp",
-    ftp: "sftp",
-    ftps: "sftp",
-};
+const { PROTOCOL_RENDERERS, normalizeServerConfig, isProtocolEnabled, getEnabledProtocols, getProtocolPort } = require("../utils/entryProtocols");
 
 const validateEntryAccess = async (accountId, entry, errorMessage = "You don't have permission to access this entry", requiredPermission = null) => {
     if (!entry) return { code: 401, message: "Entry does not exist" };
@@ -89,7 +79,7 @@ const validateJumpHosts = async (accountId, jumpHosts) => {
             };
         }
 
-        if (jumpHostEntry.config?.protocol !== 'ssh') {
+        if (jumpHostEntry.type !== 'server' || !isProtocolEnabled(jumpHostEntry, 'ssh')) {
             return {
                 valid: false,
                 error: { code: 400, message: `Jump host ${jumpHostId} is not an SSH server` }
@@ -114,6 +104,10 @@ module.exports.createEntry = async (accountId, configuration) => {
 
     if (!configuration.icon) {
         configuration.icon = "server";
+    }
+
+    if (configuration.config && (configuration.type ?? "server") === "server") {
+        normalizeServerConfig(configuration.config, { type: "server" });
     }
 
     if (!configuration.renderer && configuration.config?.protocol) {
@@ -212,6 +206,10 @@ module.exports.editEntry = async (accountId, entryId, configuration) => {
     if (configuration.folderId !== undefined && configuration.folderId !== null) {
         const folderCheck = await validateFolderAccess(accountId, configuration.folderId, Permission.RESOURCES_MANAGE);
         if (!folderCheck.valid) return folderCheck.error;
+    }
+
+    if (configuration.config && (configuration.type ?? entry.type) === "server") {
+        normalizeServerConfig(configuration.config, { type: "server" });
     }
 
     if (configuration.config?.protocol) {
@@ -385,7 +383,9 @@ module.exports.listEntries = async (accountId) => {
                 ...obj,
                 identities: identities,
                 protocol: entry.config?.protocol,
+                protocols: getEnabledProtocols(entry),
                 ip: entry.config?.ip,
+                port: entry.config?.protocol ? getProtocolPort(entry, entry.config.protocol) : entry.config?.port,
                 macAddress: entry.config?.macAddress,
                 wakeOnLanEnabled: entry.config?.wakeOnLanEnabled,
                 notes: entry.config?.notes || "",
@@ -484,12 +484,12 @@ module.exports.importSSHConfig = async (accountId, configuration) => {
                 continue;
             }
 
-            const config = {
+            const config = normalizeServerConfig({
                 ip: serverData.ip,
                 port: serverData.port,
                 protocol: "ssh",
                 ...serverData.config,
-            };
+            }, { type: "server" });
 
             const entry = await Entry.create({
                 name: serverData.name,

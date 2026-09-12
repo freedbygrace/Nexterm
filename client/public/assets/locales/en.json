@@ -1666,6 +1666,7 @@
         "serverIp": "Host",
         "port": "Port",
         "protocol": "Protocol",
+        "protocols": "Protocols",
         "username": "Username",
         "password": "Password",
         "host": "Host",
@@ -1684,6 +1685,15 @@
         "wolBroadcastAddress": "255.255.255.255"
       },
       "engineOffline": "(offline)",
+      "messages": {
+        "noProtocolEnabled": "Enable at least one protocol for this server"
+      },
+      "protocols": {
+        "hint": "All enabled protocols share the host above. The primary protocol is used by the default Connect action.",
+        "noneEnabled": "Enable at least one protocol to connect to this host.",
+        "port": "Port",
+        "primary": "Primary"
+      },
       "settings": {
         "jumpHosts": {
           "title": "Jump Hosts",

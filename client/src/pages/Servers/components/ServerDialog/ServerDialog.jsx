@@ -12,10 +12,30 @@ import { IdentityContext } from "@/common/contexts/IdentityContext.jsx";
 import { useToast } from "@/common/contexts/ToastContext.jsx";
 import { useTranslation } from "react-i18next";
 import { getAvailableTabs, validateRequiredFields, getFieldConfig } from "./utils/fieldConfig.js";
+import {
+    DEFAULT_PORTS, PROTOCOL_LABELS, getEnabledProtocolsFromConfig, getProtocolPortFromConfig, seedProtocolMap,
+} from "@/common/utils/ProtocolUtil.js";
 import Icon from "@mdi/react";
 import * as mdiIcons from "@mdi/js";
 
 const PROTOCOL_DEFAULT_ICONS = { ssh: "mdiConsole", telnet: "mdiConsole", rdp: "mdiMicrosoftWindows", vnc: "mdiMonitor", sftp: "mdiFolderNetwork", ftp: "mdiFolderNetwork", ftps: "mdiFolderNetwork", demo: "mdiFlaskOutline" };
+
+/** Settings that only apply to graphical (RDP/VNC) sessions. */
+const GUAC_ONLY_SETTINGS = [
+    "rdpSecurity", "colorDepth", "resizeMethod", "enableAudio", "enableWallpaper", "enableTheming",
+    "enableFontSmoothing", "enableFullWindowDrag", "enableDesktopComposition", "enableMenuAnimations",
+];
+
+/**
+ * Legacy entries only carry `protocol`/`port`; expand them into a `protocols` map so the dialog can
+ * edit them like any multi-protocol entry.
+ */
+const normalizeServerConfig = (rawConfig, type) => {
+    const parsed = rawConfig || {};
+    if (type !== "server" || parsed.protocol === "demo" || !parsed.protocol) return parsed;
+    if (parsed.protocols && typeof parsed.protocols === "object") return parsed;
+    return { ...parsed, protocols: seedProtocolMap(parsed.protocol, parsed.port) };
+};
 
 export const ServerDialog = ({ open, onClose, currentFolderId, currentOrganizationId, editServerId, initialProtocol }) => {
     const { t } = useTranslation();
@@ -39,11 +59,17 @@ export const ServerDialog = ({ open, onClose, currentFolderId, currentOrganizati
     const [identityUpdates, setIdentityUpdates] = useState({});
 
     const [activeTab, setActiveTab] = useState(0);
-    
+
     const initialValues = useRef({ name: '', icon: null, config: {}, monitoringEnabled: false });
 
-    const fieldConfig = getFieldConfig(entryType, config.protocol);
-    const tabs = getAvailableTabs(entryType, config.protocol);
+    const enabledProtocols = useMemo(() => getEnabledProtocolsFromConfig(config), [config]);
+    const protocolsKey = enabledProtocols.join(",");
+    const fieldConfig = useMemo(() => getFieldConfig(entryType, enabledProtocols), [entryType, protocolsKey]);
+    const tabs = useMemo(() => getAvailableTabs(entryType, enabledProtocols), [entryType, protocolsKey]);
+
+    const primaryProtocol = entryType === "server"
+        ? (enabledProtocols.includes(config.protocol) ? config.protocol : enabledProtocols[0])
+        : undefined;
 
     const normalizeIdentity = (identity) => {
         const normalized = { ...identity };
@@ -52,7 +78,7 @@ export const ServerDialog = ({ open, onClose, currentFolderId, currentOrganizati
         if (!identity.passwordTouched && normalized.password === "") normalized.password = undefined;
         if (!identity.passphraseTouched && normalized.passphrase === "") normalized.passphrase = undefined;
         if (normalized.sshCertificate === null) normalized.sshCertificate = undefined;
-        
+
         if (normalized.sshKey === null) normalized.sshKey = undefined;
         return normalized;
     };
@@ -67,7 +93,7 @@ export const ServerDialog = ({ open, onClose, currentFolderId, currentOrganizati
         if (identity.organizationId) {
             payload.organizationId = identity.organizationId;
         }
-        
+
         const hasPassphrase = typeof identity.passphrase === "string" && identity.passphrase.length > 0;
 
         if (identity.authType === 'password' || identity.authType === 'password-only') {
@@ -90,7 +116,7 @@ export const ServerDialog = ({ open, onClose, currentFolderId, currentOrganizati
                 payload.passphrase = identity.passphrase;
             }
         }
-        
+
         return payload;
     };
 
@@ -132,13 +158,13 @@ export const ServerDialog = ({ open, onClose, currentFolderId, currentOrganizati
 
     const buildConfig = () => {
         const finalConfig = { ...config };
-        
+
         if (fieldConfig.showMonitoring) {
             finalConfig.monitoringEnabled = monitoringEnabled;
         } else {
             delete finalConfig.monitoringEnabled;
         }
-        
+
         if (!fieldConfig.showIpPort) {
             delete finalConfig.ip;
             delete finalConfig.port;
@@ -146,17 +172,39 @@ export const ServerDialog = ({ open, onClose, currentFolderId, currentOrganizati
 
         if (entryType !== "server") {
             delete finalConfig.protocol;
+            delete finalConfig.protocols;
+        } else if (finalConfig.protocol === "demo") {
+            delete finalConfig.protocols;
+        } else if (enabledProtocols.length > 0) {
+            // `protocols` is the source of truth; `protocol`/`port` mirror the primary for compatibility.
+            const protocols = { ...(finalConfig.protocols || {}) };
+            for (const protocol of enabledProtocols) {
+                if (!protocols[protocol]) {
+                    protocols[protocol] = { enabled: true, port: getProtocolPortFromConfig(finalConfig, protocol) };
+                }
+            }
+            finalConfig.protocols = protocols;
+            finalConfig.protocol = primaryProtocol;
+            finalConfig.port = getProtocolPortFromConfig(finalConfig, primaryProtocol);
         }
 
         if (!fieldConfig.showKeyboardLayout) {
             delete finalConfig.keyboardLayout;
         }
 
-        if (finalConfig.protocol !== "telnet") {
+        if (!fieldConfig.showJumpHosts) {
+            delete finalConfig.jumpHosts;
+        }
+
+        if (!enabledProtocols.includes("telnet")) {
             delete finalConfig.telnetUsernamePrompt;
             delete finalConfig.telnetPasswordPrompt;
         }
-        
+
+        if (entryType === "server" && !enabledProtocols.includes("rdp") && !enabledProtocols.includes("vnc")) {
+            for (const key of GUAC_ONLY_SETTINGS) delete finalConfig[key];
+        }
+
         return finalConfig;
     };
 
@@ -209,24 +257,29 @@ export const ServerDialog = ({ open, onClose, currentFolderId, currentOrganizati
     };
 
     const handleSubmit = useCallback(() => {
-        if (!validateRequiredFields(entryType, config.protocol, name, config)) {
+        if (entryType === "server" && enabledProtocols.length === 0) {
+            sendToast("Error", t("servers.dialog.messages.noProtocolEnabled"));
+            return;
+        }
+        if (!validateRequiredFields(entryType, enabledProtocols, name, config)) {
             sendToast("Error", t("servers.messages.fillRequiredFields"));
             return;
         }
         editServerId ? patchServer() : createServer();
-    }, [name, icon, editServerId, identityUpdates, currentFolderId, config, monitoringEnabled, entryType, t]);
+    }, [name, icon, editServerId, identityUpdates, currentFolderId, config, monitoringEnabled, entryType, enabledProtocols, t]);
 
     useEffect(() => {
         if (!open) return;
 
         if (editServerId) {
             getRequest("entries/" + editServerId).then((server) => {
+                const type = server.type || "server";
                 setName(server.name);
                 setIcon(server.icon || null);
                 setIdentities(server.identities);
-                setEntryType(server.type || "server");
+                setEntryType(type);
 
-                const parsedConfig = server.config || {};
+                const parsedConfig = normalizeServerConfig(server.config, type);
                 setConfig(parsedConfig);
                 setMonitoringEnabled(Boolean(parsedConfig.monitoringEnabled ?? true));
                 initialValues.current = {
@@ -241,23 +294,24 @@ export const ServerDialog = ({ open, onClose, currentFolderId, currentOrganizati
             setIcon(null);
             setIdentities([]);
             setEntryType("server");
-            
-            if (initialProtocol) {
-                const portMap = { ssh: "22", telnet: "23", rdp: "3389", vnc: "5900", sftp: "22", ftp: "21", ftps: "21" };
 
-                let initialConfig = { protocol: initialProtocol };
-                if (getFieldConfig("server", initialProtocol).showIpPort) {
-                    initialConfig.port = portMap[initialProtocol] || "";
-                }
+            if (initialProtocol) {
+                const initialConfig = initialProtocol === "demo"
+                    ? { protocol: "demo" }
+                    : {
+                        protocol: initialProtocol,
+                        port: DEFAULT_PORTS[initialProtocol] ?? "",
+                        protocols: seedProtocolMap(initialProtocol),
+                    };
 
                 setConfig(initialConfig);
                 const defaultIcon = PROTOCOL_DEFAULT_ICONS[initialProtocol] || null;
                 setIcon(defaultIcon);
-                initialValues.current = { 
-                    name: '', 
-                    icon: defaultIcon, 
-                    config: JSON.stringify(initialConfig), 
-                    monitoringEnabled: false 
+                initialValues.current = {
+                    name: '',
+                    icon: defaultIcon,
+                    config: JSON.stringify(initialConfig),
+                    monitoringEnabled: false
                 };
             } else {
                 setConfig({});
@@ -268,7 +322,11 @@ export const ServerDialog = ({ open, onClose, currentFolderId, currentOrganizati
 
         setIdentityUpdates({});
         setActiveTab(0);
-    }, [open, editServerId, initialProtocol, fieldConfig.showIpPort]);
+    }, [open, editServerId, initialProtocol]);
+
+    useEffect(() => {
+        if (activeTab >= tabs.length) setActiveTab(0);
+    }, [activeTab, tabs.length]);
 
     useEffect(() => {
         if (!open) return;
@@ -291,7 +349,7 @@ export const ServerDialog = ({ open, onClose, currentFolderId, currentOrganizati
         getRequest("servers/" + editServerId).then((server) => setIdentities(server.identities));
     };
 
-    const isDirty = name !== initialValues.current.name || 
+    const isDirty = name !== initialValues.current.name ||
                      icon !== initialValues.current.icon ||
                      JSON.stringify(config) !== initialValues.current.config ||
                      monitoringEnabled !== initialValues.current.monitoringEnabled ||
@@ -303,29 +361,40 @@ export const ServerDialog = ({ open, onClose, currentFolderId, currentOrganizati
         icon: tab.icon
     })), [tabs, t]);
 
+    const badgeProtocols = entryType === "server"
+        ? (config.protocol === "demo" ? ["demo"] : enabledProtocols)
+        : [];
+
     return (
         <DialogProvider open={open} onClose={onClose} isDirty={isDirty}>
             <div className="server-dialog">
                 <div className="server-dialog-header">
                     <div className="dialog-icon">
-                        <Icon path={mdiIcons[getProtocolIcon(config.protocol, entryType)] || mdiIcons.mdiServerNetwork} size={1} />
+                        <Icon path={mdiIcons[getProtocolIcon(primaryProtocol || config.protocol, entryType)] || mdiIcons.mdiServerNetwork} size={1} />
                     </div>
                     <div className="server-dialog-title">
                         <h2>
-                            {editServerId 
-                                ? t("servers.dialog.editServer") 
-                                : config.protocol 
-                                    ? t("servers.dialog.addProtocolServer", { protocol: config.protocol.toUpperCase() })
+                            {editServerId
+                                ? t("servers.dialog.editServer")
+                                : primaryProtocol
+                                    ? t("servers.dialog.addProtocolServer", { protocol: (PROTOCOL_LABELS[primaryProtocol] || primaryProtocol).toUpperCase() })
                                     : t("servers.dialog.addServer")
                             }
                         </h2>
-                        {entryType === "server" && config.protocol && (
-                            <span className="protocol-badge">{config.protocol.toUpperCase()}</span>
+                        {badgeProtocols.length > 0 && (
+                            <div className="protocol-badges">
+                                {badgeProtocols.map(protocol => (
+                                    <span key={protocol}
+                                          className={`protocol-badge${protocol === primaryProtocol ? " primary" : ""}`}>
+                                        {(PROTOCOL_LABELS[protocol] || protocol).toUpperCase()}
+                                    </span>
+                                ))}
+                            </div>
                         )}
                         {entryType?.startsWith('pve') && (
                             <span className="protocol-badge">
-                                {entryType === 'pve-shell' ? 'PVE SHELL' : 
-                                 entryType === 'pve-lxc' ? 'PVE LXC' : 
+                                {entryType === 'pve-shell' ? 'PVE SHELL' :
+                                 entryType === 'pve-lxc' ? 'PVE LXC' :
                                  entryType === 'pve-qemu' ? 'PVE QEMU' : 'PVE'}
                             </span>
                         )}
@@ -347,13 +416,13 @@ export const ServerDialog = ({ open, onClose, currentFolderId, currentOrganizati
                     {activeTab === 0 && <DetailsPage name={name} setName={setName}
                                                      icon={icon} setIcon={setIcon}
                                                      config={config} setConfig={setConfig}
-                                                     fieldConfig={fieldConfig} />}
+                                                     fieldConfig={fieldConfig} entryType={entryType} />}
                     {activeTab === 1 && tabs[1]?.key === "identities" &&
                         <IdentityPage serverIdentities={identities} setIdentityUpdates={setIdentityUpdates}
                                       identityUpdates={identityUpdates} setIdentities={setIdentities}
                                       currentOrganizationId={currentOrganizationId} allowedAuthTypes={fieldConfig.allowedAuthTypes}
                                       serverName={name} />}
-                    {tabs.find((tab, idx) => idx === activeTab && tab.key === "settings") && 
+                    {tabs.find((tab, idx) => idx === activeTab && tab.key === "settings") &&
                         <SettingsPage config={config} setConfig={setConfig}
                                       monitoringEnabled={monitoringEnabled} setMonitoringEnabled={setMonitoringEnabled}
                                       fieldConfig={fieldConfig} editServerId={editServerId} />}

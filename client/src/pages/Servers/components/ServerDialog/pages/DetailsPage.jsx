@@ -2,21 +2,12 @@ import { mdiFormTextbox, mdiIp, mdiEthernet } from "@mdi/js";
 import Input from "@/common/components/IconInput";
 import SelectBox from "@/common/components/SelectBox";
 import IconChooser from "../components/IconChooser";
+import ProtocolSelector from "../components/ProtocolSelector";
 import { useTranslation } from "react-i18next";
 import { useEffect, useState } from "react";
 import { getRequest } from "@/common/utils/RequestUtil.js";
 
-const PROTOCOL_OPTIONS = [
-    { label: "SSH", value: "ssh" },
-    { label: "Telnet", value: "telnet" },
-    { label: "RDP", value: "rdp" },
-    { label: "VNC", value: "vnc" },
-    { label: "SFTP", value: "sftp" },
-    { label: "FTP", value: "ftp" },
-    { label: "FTPS", value: "ftps" }
-];
-
-const DetailsPage = ({name, setName, icon, setIcon, config, setConfig, fieldConfig}) => {
+const DetailsPage = ({name, setName, icon, setIcon, config, setConfig, fieldConfig, entryType = "server"}) => {
     const { t } = useTranslation();
     const [engines, setEngines] = useState([]);
 
@@ -30,6 +21,7 @@ const DetailsPage = ({name, setName, icon, setIcon, config, setConfig, fieldConf
     }));
 
     const showEngineSelect = engines.length > 1;
+    const showProtocolSelector = entryType === "server" && fieldConfig.showProtocol && config.protocol !== "demo";
     
     return (
         <>
@@ -58,25 +50,33 @@ const DetailsPage = ({name, setName, icon, setIcon, config, setConfig, fieldConf
             
             {fieldConfig.showIpPort && (
                 <>
-                    <div className="address-row">
-                        <div className="form-group">
-                            <label htmlFor="ip">{t("servers.dialog.fields.serverIp")}</label>
-                            <Input icon={mdiIp} type="text" placeholder={t("servers.dialog.placeholders.serverIp")} 
-                                   id="ip" autoComplete="off" value={config.ip || ""} 
-                                   setValue={(value) => setConfig(prev => ({ ...prev, ip: value }))} />
-                        </div>
-                        <div className="form-group">
-                            <label htmlFor="port">{t("servers.dialog.fields.port")}</label>
-                            <input type="text" placeholder={t("servers.dialog.placeholders.port")} 
-                                   value={config.port || ""} className="small-input" id="port"
-                                   onChange={(e) => setConfig(prev => ({ ...prev, port: e.target.value }))} />
-                        </div>
-                    </div>
-                    {fieldConfig.showProtocol && (
-                        <div className="form-group">
-                            <label>{t("servers.dialog.fields.protocol")}</label>
-                            <SelectBox options={PROTOCOL_OPTIONS} selected={config.protocol} 
-                                       setSelected={(value) => setConfig(prev => ({ ...prev, protocol: value }))} />
+                    {showProtocolSelector ? (
+                        <>
+                            <div className="form-group">
+                                <label htmlFor="ip">{t("servers.dialog.fields.serverIp")}</label>
+                                <Input icon={mdiIp} type="text" placeholder={t("servers.dialog.placeholders.serverIp")} 
+                                       id="ip" autoComplete="off" value={config.ip || ""} 
+                                       setValue={(value) => setConfig(prev => ({ ...prev, ip: value }))} />
+                            </div>
+                            <div className="form-group">
+                                <label>{t("servers.dialog.fields.protocols")}</label>
+                                <ProtocolSelector config={config} setConfig={setConfig} />
+                            </div>
+                        </>
+                    ) : (
+                        <div className="address-row">
+                            <div className="form-group">
+                                <label htmlFor="ip">{t("servers.dialog.fields.serverIp")}</label>
+                                <Input icon={mdiIp} type="text" placeholder={t("servers.dialog.placeholders.serverIp")} 
+                                       id="ip" autoComplete="off" value={config.ip || ""} 
+                                       setValue={(value) => setConfig(prev => ({ ...prev, ip: value }))} />
+                            </div>
+                            <div className="form-group">
+                                <label htmlFor="port">{t("servers.dialog.fields.port")}</label>
+                                <input type="text" placeholder={t("servers.dialog.placeholders.port")} 
+                                       value={config.port || ""} className="small-input" id="port"
+                                       onChange={(e) => setConfig(prev => ({ ...prev, port: e.target.value }))} />
+                            </div>
                         </div>
                     )}
                     {config.wakeOnLanEnabled && (

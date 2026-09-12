@@ -134,7 +134,7 @@ const SettingsPage = ({ config, setConfig, monitoringEnabled, setMonitoringEnabl
             entries.forEach(entry => {
                 if (entry.type === 'folder' || entry.type === 'organization') {
                     collectSSHServers(entry.entries || []);
-                } else if (entry.type === 'server' && entry.protocol === 'ssh' && entry.id !== editServerId) {
+                } else if (entry.type === 'server' && entry.id !== editServerId && (Array.isArray(entry.protocols) ? entry.protocols.includes('ssh') : entry.protocol === 'ssh')) {
                     sshServers.push(entry);
                 }
             });
@@ -171,8 +171,8 @@ const SettingsPage = ({ config, setConfig, monitoringEnabled, setMonitoringEnabl
         return availableJumpHosts.filter(server => !selectedIds.includes(server.id));
     };
 
-    const showJumpHosts = ['ssh', 'rdp', 'vnc'].includes(config?.protocol);
-    const showTelnetAutoLogin = config?.protocol === 'telnet';
+    const showJumpHosts = Boolean(fieldConfig.showJumpHosts);
+    const showTelnetAutoLogin = Boolean(fieldConfig.showTelnetAutoLogin);
 
     if (!fieldConfig.showMonitoring && !fieldConfig.showKeyboardLayout && !fieldConfig.showDisplaySettings && !fieldConfig.showAudioSettings && !fieldConfig.showWakeOnLan && !fieldConfig.showTerminalSettings && !showJumpHosts && !showTelnetAutoLogin) {
         return <p className="text-center">{t('servers.dialog.settings.noSettings')}</p>;

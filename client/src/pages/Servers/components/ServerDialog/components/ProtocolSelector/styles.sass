@@ -1,0 +1,132 @@
+@use "@/common/styles/colors"
+
+.protocol-selector
+  display: flex
+  flex-direction: column
+  border: 1px solid colors.$gray
+  border-radius: 0.75rem
+  overflow: hidden
+  user-select: none
+
+  &__header
+    display: flex
+    align-items: center
+    gap: 0.75rem
+    padding: 0.5rem 0.75rem
+    background-color: colors.$dark-gray
+    border-bottom: 1px solid colors.$gray
+    color: colors.$subtext
+    font-size: 0.7rem
+    font-weight: 700
+    text-transform: uppercase
+    letter-spacing: 0.05em
+
+  &__row
+    display: flex
+    align-items: center
+    gap: 0.75rem
+    padding: 0.5rem 0.75rem
+    border-bottom: 1px solid colors.$gray
+    transition: background-color 0.1s ease
+
+    &:hover
+      background-color: colors.$dark-gray
+
+    &.primary
+      background-color: rgba(colors.$primary, 0.06)
+
+  &__column
+    display: flex
+    align-items: center
+
+    &--name
+      flex: 1
+      gap: 0.625rem
+      min-width: 0
+
+    &--port
+      width: 5rem
+      justify-content: center
+      flex-shrink: 0
+
+    &--primary
+      width: 4rem
+      justify-content: center
+      flex-shrink: 0
+
+  &__label
+    color: colors.$subtext
+    font-weight: 600
+    font-size: 0.875rem
+    cursor: pointer
+    transition: color 0.1s ease
+
+  &__row.enabled &__label
+    color: colors.$white
+
+  &__port
+    width: 100%
+    box-sizing: border-box
+    padding: 0.4rem 0.5rem
+    border: 1px solid colors.$gray
+    background-color: colors.$lighter-background
+    color: colors.$white
+    border-radius: 0.5rem
+    font-size: 0.875rem
+    text-align: center
+    outline: none
+    transition: border-color 0.1s ease, background-color 0.1s ease, opacity 0.1s ease
+
+    &:focus
+      border-color: colors.$primary
+      background-color: colors.$dark-gray
+
+    &:disabled
+      opacity: 0.4
+      cursor: not-allowed
+
+  &__radio
+    appearance: none
+    -webkit-appearance: none
+    width: 18px
+    height: 18px
+    margin: 0
+    border: 1px solid colors.$gray
+    border-radius: 50%
+    background-color: colors.$lighter-background
+    cursor: pointer
+    position: relative
+    transition: border-color 0.15s ease, background-color 0.15s ease
+
+    &::after
+      content: ""
+      position: absolute
+      inset: 4px
+      border-radius: 50%
+      background-color: transparent
+      transition: background-color 0.15s ease
+
+    &:hover:not(:disabled)
+      border-color: colors.$primary
+
+    &:checked
+      border-color: colors.$primary
+      background-color: rgba(colors.$primary, 0.15)
+
+      &::after
+        background-color: colors.$primary
+
+    &:focus-visible
+      outline: 2px solid colors.$primary
+      outline-offset: 2px
+
+    &:disabled
+      opacity: 0.4
+      cursor: not-allowed
+
+  &__hint
+    margin: 0
+    padding: 0.5rem 0.75rem
+    font-size: 0.75rem
+    color: colors.$subtext
+    background-color: rgba(0, 0, 0, 0.1)

@@ -9,6 +9,7 @@ import { IdentityContext } from "@/common/contexts/IdentityContext.jsx";
 import { useScripts } from "@/common/contexts/ScriptContext.jsx";
 import ServerEntries from "./components/ServerEntries.jsx";
 import { isCredentiallessProtocol } from "@/common/utils/ConnectionUtil.js";
+import { getServerProtocols, getPrimaryProtocol, hasProtocol, PROTOCOL_LABELS, FILE_PROTOCOLS, GUAC_PROTOCOLS } from "@/common/utils/ProtocolUtil.js";
 import { useDevFeature } from "@/common/utils/devFeatures.js";
 import { useBodyClass } from "@/common/hooks/useBodyClass.js";
 import Icon from "@mdi/react";
@@ -382,9 +383,21 @@ export const ServerList = ({
     const openSSHConfigImport = () => { setFolderContext(); setSSHConfigImportDialogOpen(); };
 
     const getIdentity = (id = null) => identities?.find(i => i.id === (id || server?.identities[0]));
-    const connect = (id = null) => connectToServer(server?.id, getIdentity(id));
+    const connect = (id = null, protocol = null) => connectToServer(server?.id, getIdentity(id), undefined, null, protocol);
     const connectSFTP = (id = null) => openSFTP(server?.id, getIdentity(id));
     const openBrowserSession = (id = null) => openBrowser(server?.id, getIdentity(id));
+
+    // Protocols of the right-clicked server other than its primary one ("Connect via ...").
+    const primaryProtocol = server ? getPrimaryProtocol(server) : null;
+    const secondaryProtocols = server?.type === "server"
+        ? getServerProtocols(server).filter(p => p !== primaryProtocol && p !== "sftp")
+        : [];
+    const protocolIcon = (protocol) => GUAC_PROTOCOLS.includes(protocol) ? mdiMonitor
+        : FILE_PROTOCOLS.includes(protocol) ? mdiFolderNetwork : mdiConsole;
+    const connectVia = (protocol, id = null) => {
+        if (FILE_PROTOCOLS.includes(protocol)) return openSFTP(server?.id, getIdentity(id), protocol);
+        return connect(id, protocol);
+    };
 
     const getIdentityName = (identityId) => {
         const identity = identities?.find(id => id.id === identityId);
@@ -774,9 +787,9 @@ export const ServerList = ({
                                         <ContextMenuSeparator />
                                     </>
                                 )}
-                                {(server?.identities?.length > 0 || isCredentiallessProtocol(server?.protocol)) && (
+                                {(server?.identities?.length > 0 || isCredentiallessProtocol(primaryProtocol)) && (
                                     <>
-                                        {isCredentiallessProtocol(server?.protocol) ? (
+                                        {isCredentiallessProtocol(primaryProtocol) ? (
                                             <ContextMenuItem
                                                 icon={mdiConnection}
                                                 label={t("servers.contextMenu.connect")}
@@ -806,7 +819,35 @@ export const ServerList = ({
                                     </>
                                 )}
 
-                                {server?.identities?.length > 0 && server?.protocol === "ssh" && (
+                                {secondaryProtocols.map((protocol) => (
+                                    (server?.identities?.length > 0 || isCredentiallessProtocol(protocol)) && (
+                                        isCredentiallessProtocol(protocol) || server.identities.length === 1 ? (
+                                            <ContextMenuItem
+                                                key={protocol}
+                                                icon={protocolIcon(protocol)}
+                                                label={t("servers.contextMenu.connectVia", { protocol: PROTOCOL_LABELS[protocol] || protocol.toUpperCase() })}
+                                                onClick={() => connectVia(protocol, isCredentiallessProtocol(protocol) ? null : server.identities[0])}
+                                            />
+                                        ) : (
+                                            <ContextMenuItem
+                                                key={protocol}
+                                                icon={protocolIcon(protocol)}
+                                                label={t("servers.contextMenu.connectVia", { protocol: PROTOCOL_LABELS[protocol] || protocol.toUpperCase() })}
+                                            >
+                                                {server.identities.map((identityId) => (
+                                                    <ContextMenuItem
+                                                        key={identityId}
+                                                        icon={mdiAccountCircle}
+                                                        label={getIdentityName(identityId)}
+                                                        onClick={() => connectVia(protocol, identityId)}
+                                                    />
+                                                ))}
+                                            </ContextMenuItem>
+                                        )
+                                    )
+                                ))}
+
+                                {server?.identities?.length > 0 && hasProtocol(server, "sftp") && primaryProtocol !== "sftp" && (
                                     <>
                                         {server.identities.length === 1 ? (
                                             <ContextMenuItem
@@ -832,7 +873,7 @@ export const ServerList = ({
                                     </>
                                 )}
 
-                                {server?.identities?.length > 0 && server?.protocol === "ssh" && (
+                                {server?.identities?.length > 0 && hasProtocol(server, "ssh") && (
                                     <>
                                         {server.identities.length === 1 ? (
                                             <ContextMenuItem
@@ -858,7 +899,7 @@ export const ServerList = ({
                                     </>
                                 )}
 
-                                {server?.identities?.length > 0 && server?.protocol === "ssh" && openPortForward && (
+                                {server?.identities?.length > 0 && hasProtocol(server, "ssh") && openPortForward && (
                                     <ContextMenuItem
                                         icon={mdiTunnel}
                                         label={t("servers.contextMenu.forwardPort")}
@@ -866,7 +907,7 @@ export const ServerList = ({
                                     />
                                 )}
 
-                                {server?.identities?.length > 0 && server?.protocol === "ssh" && (scripts.length > 0 || sourceScripts.length > 0) && (
+                                {server?.identities?.length > 0 && hasProtocol(server, "ssh") && (scripts.length > 0 || sourceScripts.length > 0) && (
                                     <ContextMenuItem
                                         icon={mdiScript}
                                         label={t("servers.contextMenu.runScript")}
@@ -874,7 +915,7 @@ export const ServerList = ({
                                     />
                                 )}
 
-                                {server?.type === "server" && (server?.protocol === "ssh" || server?.protocol === "telnet" || server?.protocol === "rdp" || server?.protocol === "vnc" || server?.protocol === "sftp" || server?.protocol === "ftp" || server?.protocol === "ftps") && (
+                                {server?.type === "server" && primaryProtocol !== "demo" && (
                                     <ContextMenuItem
                                         icon={mdiCursorDefaultClick}
                                         label={t("servers.contextMenu.quickConnect")}

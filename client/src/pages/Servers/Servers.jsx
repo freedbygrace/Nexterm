@@ -21,6 +21,7 @@ import { ServerContext } from "@/common/contexts/ServerContext.jsx";
 import { StateStreamContext, STATE_TYPES } from "@/common/contexts/StateStreamContext.jsx";
 import { isTauri } from "@/common/utils/TauriUtil.js";
 import { getTabId, getBrowserId, requiresIdentity, canConnectWithoutPrompt } from "@/common/utils/ConnectionUtil.js";
+import { getRendererForProtocol, getSessionTypeForProtocol, getPrimaryProtocol } from "@/common/utils/ProtocolUtil.js";
 import { postRequest, deleteRequest, patchRequest } from "@/common/utils/RequestUtil";
 
 let reconnectKeySeq = 0;
@@ -36,6 +37,7 @@ export const Servers = () => {
     const [sshConfigImportDialogOpen, setSSHConfigImportDialogOpen] = useState(false);
     const [connectionReasonDialogOpen, setConnectionReasonDialogOpen] = useState(false);
     const [directConnectDialogOpen, setDirectConnectDialogOpen] = useState(false);
+    const [directConnectProtocol, setDirectConnectProtocol] = useState(null);
     const [directConnectServer, setDirectConnectServer] = useState(null);
     const [directConnectPlacement, setDirectConnectPlacement] = useState(null);
     const [pendingConnection, setPendingConnection] = useState(null);
@@ -110,11 +112,13 @@ export const Servers = () => {
             if (!server) return null;
             return {
                 id: session.sessionId,
-                server,
+                // A session may run over a non-primary protocol of the entry; keep its own renderer.
+                server: session.configuration.renderer ? { ...server, renderer: session.configuration.renderer } : server,
                 identity: session.configuration.identityId,
                 isHibernated: session.isHibernated,
                 lastActivity: session.lastActivity,
                 type: session.configuration.type || undefined,
+                protocol: session.configuration.protocol || undefined,
                 organizationId: session.organizationId,
                 organizationName: session.organizationName,
                 osName: session.osName || null,
@@ -205,22 +209,28 @@ export const Servers = () => {
         return findOrganizationForServer(parseInt(serverId), servers)?.requireConnectionReason || false;
     };
 
-    const connectToServer = async (serverId, identity, overrideRenderer, placement = null) => {
+    /**
+     * @param {string|null} protocol - which of the entry's enabled protocols to open; null = primary.
+     */
+    const connectToServer = async (serverId, identity, overrideRenderer, placement = null, protocol = null) => {
         const server = getServerById(serverId);
+        const targetProtocol = protocol || (server ? getPrimaryProtocol(server) : null);
 
-        const hibernated = hibernatedSessions.find(s => s.server.id === serverId && s.identity === identity?.id);
+        const hibernated = hibernatedSessions.find(s => s.server.id === serverId && s.identity === identity?.id
+            && (s.protocol || getPrimaryProtocol(s.server)) === targetProtocol);
         if (hibernated) {
             sessionLayout.placeSession(hibernated.id, placement);
             resumeConnection(hibernated.id);
             return;
         }
 
-        if (server && !canConnectWithoutPrompt(server)) {
-            openDirectConnect(server, placement);
+        if (server && !canConnectWithoutPrompt(server, targetProtocol)) {
+            openDirectConnect(server, placement, protocol);
             return;
         }
 
-        initiateConnection({ server: { ...server, renderer: overrideRenderer || server.renderer }, identity, placement });
+        const renderer = overrideRenderer || (protocol && getRendererForProtocol(protocol)) || server.renderer;
+        initiateConnection({ server: { ...server, renderer }, identity, placement, protocol });
     };
 
     const connectFromDrop = (serverId, placement) => {
@@ -267,8 +277,11 @@ export const Servers = () => {
         setActiveSessionId(tabId);
     };
 
-    const openSFTP = async (server, identity) => {
-        initiateConnection({ server: getServerById(server), identity, type: "sftp" });
+    /**
+     * Opens the file manager. `protocol` may be "sftp" (default), "ftp" or "ftps" on multi-protocol entries.
+     */
+    const openSFTP = async (server, identity, protocol = "sftp") => {
+        initiateConnection({ server: getServerById(server), identity, type: "sftp", protocol: protocol === "sftp" ? null : protocol });
     };
 
     const openBrowser = async (server, identity) => {
@@ -276,13 +289,15 @@ export const Servers = () => {
     };
 
     const performConnection = async (options, connectionReason = null) => {
-        const { server, identity = null, type = null, directIdentity = null, scriptId = null, scriptName = null, placement = null, replaceSessionId = null } = options;
+        const { server, identity = null, type = null, protocol = null, directIdentity = null, scriptId = null, scriptName = null, placement = null, replaceSessionId = null } = options;
         try {
+            // `type` is the legacy renderer override ("sftp" / "web"); `protocol` selects one of the
+            // entry's enabled protocols. The API accepts either in its `type` field.
             const payload = {
                 entryId: server.id,
                 identityId: identity?.id,
                 connectionReason,
-                type,
+                type: protocol || type,
                 tabId: getTabId(),
                 browserId: getBrowserId(),
             };
@@ -301,7 +316,8 @@ export const Servers = () => {
                 server,
                 identity: identity?.id,
                 id: session.sessionId,
-                type: type || undefined,
+                type: type || getSessionTypeForProtocol(protocol) || undefined,
+                protocol: protocol || (type === "web" ? "web" : type === "sftp" ? "sftp" : getPrimaryProtocol(server)) || undefined,
                 organizationId: organizationId,
                 organizationName: organization?.name || null,
                 scriptId: scriptId || undefined,
@@ -626,14 +642,16 @@ export const Servers = () => {
         setCurrentFolderId(null);
     };
 
-    const openDirectConnect = (server, placement = null) => {
-        if (!requiresIdentity(server)) {
-            initiateConnection({ server, placement });
+    const openDirectConnect = (server, placement = null, protocol = null) => {
+        if (!requiresIdentity(server, protocol)) {
+            const renderer = (protocol && getRendererForProtocol(protocol)) || server.renderer;
+            initiateConnection({ server: { ...server, renderer }, placement, protocol });
             return;
         }
 
         setDirectConnectServer(server);
         setDirectConnectPlacement(placement);
+        setDirectConnectProtocol(protocol);
         setDirectConnectDialogOpen(true);
     };
 
@@ -654,10 +672,13 @@ export const Servers = () => {
         setDirectConnectDialogOpen(false);
         setDirectConnectServer(null);
         setDirectConnectPlacement(null);
+        setDirectConnectProtocol(null);
     };
 
-    const handleDirectConnect = (directIdentity) => {
-        initiateConnection({ server: directConnectServer, directIdentity, placement: directConnectPlacement });
+    const handleDirectConnect = (directIdentity, protocol = null) => {
+        const server = directConnectServer;
+        const renderer = (protocol && getRendererForProtocol(protocol)) || server?.renderer;
+        initiateConnection({ server: { ...server, renderer }, directIdentity, placement: directConnectPlacement, protocol });
     };
 
     useEffect(() => {
@@ -697,6 +718,7 @@ export const Servers = () => {
                 open={directConnectDialogOpen}
                 onClose={closeDirectConnectDialog}
                 server={directConnectServer}
+                initialProtocol={directConnectProtocol}
                 onConnect={handleDirectConnect}
             />
             <ConnectionReasonDialog

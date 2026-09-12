@@ -1579,6 +1579,7 @@
       "connect": "Connect",
       "quickConnect": "Quick Connect",
       "openSFTP": "Open SFTP",
+      "connectVia": "Connect via {{protocol}}",
       "openBrowser": "Open Browser",
       "forwardPort": "Forward Port",
       "runScript": "Run Script",

@@ -12,6 +12,7 @@ import {
 import Input from "@/common/components/IconInput";
 import SelectBox from "@/common/components/SelectBox";
 import { getFieldConfig } from "@/pages/Servers/components/ServerDialog/utils/fieldConfig.js";
+import { getServerProtocols, getPrimaryProtocol, PROTOCOL_LABELS, isCredentiallessProtocol } from "@/common/utils/ProtocolUtil.js";
 
 const readTextFile = (event, setValue) => {
     const file = event.target.files?.[0];
@@ -22,11 +23,18 @@ const readTextFile = (event, setValue) => {
     reader.readAsText(file);
 };
 
-export const DirectConnectDialog = ({ open, onClose, onConnect, server }) => {
+/**
+ * @param {string|null} initialProtocol - protocol pre-selected by the caller (e.g. "Connect via RDP");
+ *                                        when the entry exposes several protocols the user can switch.
+ */
+export const DirectConnectDialog = ({ open, onClose, onConnect, server, initialProtocol = null }) => {
     const { t } = useTranslation();
     const { sendToast } = useToast();
 
-    const protocol = server?.protocol ?? server?.config?.protocol;
+    const availableProtocols = useMemo(() => getServerProtocols(server), [server]);
+    const primaryProtocol = getPrimaryProtocol(server) ?? server?.config?.protocol ?? null;
+    const [protocol, setProtocol] = useState(initialProtocol || primaryProtocol);
+
     const fieldConfig = useMemo(() => getFieldConfig("server", protocol), [protocol]);
     const allowedAuthTypes = fieldConfig.allowedAuthTypes || ["password", "ssh", "both"];
     const defaultAuthType = allowedAuthTypes[0] || "password";
@@ -50,6 +58,11 @@ export const DirectConnectDialog = ({ open, onClose, onConnect, server }) => {
         [allowedAuthTypes, t]
     );
 
+    const protocolOptions = useMemo(() =>
+        availableProtocols.map(p => ({ label: PROTOCOL_LABELS[p] || p.toUpperCase(), value: p })),
+        [availableProtocols]
+    );
+
     const readFile = (event) => {
         readTextFile(event, setSshKey);
     };
@@ -58,7 +71,11 @@ export const DirectConnectDialog = ({ open, onClose, onConnect, server }) => {
         readTextFile(event, setSshCertificate);
     };
 
+    const credentialless = isCredentiallessProtocol(protocol);
+
     const validateFields = () => {
+        if (credentialless) return true;
+
         if (authType !== "password-only" && !username) {
             sendToast("Error", t("servers.messages.usernameRequired") || "Username is required");
             return false;
@@ -80,6 +97,12 @@ export const DirectConnectDialog = ({ open, onClose, onConnect, server }) => {
     const handleConnect = useCallback(() => {
         if (!validateFields()) return;
 
+        if (credentialless) {
+            onConnect(null, protocol);
+            onClose();
+            return;
+        }
+
         const directIdentity = {
             username: authType === "password-only" ? undefined : username,
             type: authType,
@@ -93,20 +116,25 @@ export const DirectConnectDialog = ({ open, onClose, onConnect, server }) => {
 
         if (authType === "ssh" || authType === "both") directIdentity.sshCertificate = sshCertificate || undefined;
 
-        onConnect(directIdentity);
+        onConnect(directIdentity, protocol);
         onClose();
-    }, [username, authType, password, sshKey, sshCertificate, passphrase, onConnect, onClose]);
+    }, [username, authType, password, sshKey, sshCertificate, passphrase, protocol, credentialless, onConnect, onClose]);
 
     useEffect(() => {
         if (!open) return;
 
+        setProtocol(initialProtocol || primaryProtocol);
         setUsername("");
-        setAuthType(defaultAuthType);
         setPassword("");
         setSshKey(null);
         setSshCertificate(null);
         setPassphrase("");
-    }, [open, defaultAuthType]);
+    }, [open, initialProtocol, primaryProtocol]);
+
+    useEffect(() => {
+        if (!open) return;
+        setAuthType(current => allowedAuthTypes.includes(current) ? current : defaultAuthType);
+    }, [open, allowedAuthTypes, defaultAuthType]);
 
     useEffect(() => {
         if (!open) return;
@@ -125,6 +153,7 @@ export const DirectConnectDialog = ({ open, onClose, onConnect, server }) => {
     }, [open, handleConnect]);
 
     const showUsername = authType !== "password-only";
+    const showProtocolSelect = protocolOptions.length > 1;
 
     return (
         <DialogProvider open={open} onClose={onClose}>
@@ -134,6 +163,18 @@ export const DirectConnectDialog = ({ open, onClose, onConnect, server }) => {
                 </div>
 
                 <div className="direct-connect-content">
+                    {showProtocolSelect && (
+                        <div className="form-group">
+                            <label>{t("servers.dialog.fields.protocol")}</label>
+                            <SelectBox
+                                options={protocolOptions}
+                                selected={protocol}
+                                setSelected={setProtocol}
+                            />
+                        </div>
+                    )}
+
+                    {!credentialless && (
                     <div className="identity-section">
                         <div className={`name-row ${!showUsername ? 'single-column' : ''}`}>
                             {showUsername && (
@@ -211,6 +252,7 @@ export const DirectConnectDialog = ({ open, onClose, onConnect, server }) => {
                             </>
                         )}
                     </div>
+                    )}
                 </div>
 
                 <Button

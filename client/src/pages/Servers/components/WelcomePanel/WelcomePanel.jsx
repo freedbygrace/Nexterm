@@ -13,6 +13,7 @@ import DownloadAppsDialog from "@/common/components/DownloadAppsDialog";
 import { DeviceLinkDialog } from "@/common/components/DeviceLinkDialog/DeviceLinkDialog.jsx";
 import { getAvatarLabel } from "@/common/utils/avatar.js";
 import { useDrop } from "react-dnd";
+import { hasProtocol } from "@/common/utils/ProtocolUtil.js";
 
 const formatTimeAgo = (timestamp) => {
     const diffMins = Math.floor((Date.now() - new Date(timestamp)) / 60000);
@@ -164,11 +165,11 @@ export const WelcomePanel = ({
                     <>
                         <ContextMenuItem icon={mdiConnection} label={t("servers.contextMenu.connect")}
                                          onClick={connect} />
-                        {server.protocol === "ssh" && openSFTP && (
+                        {hasProtocol(server, "sftp") && openSFTP && (
                             <ContextMenuItem icon={mdiFolderOpen} label={t("servers.contextMenu.openSFTP")}
                                              onClick={connectSftp} />
                         )}
-                        {server.protocol === "ssh" && openBrowser && (
+                        {hasProtocol(server, "ssh") && openBrowser && (
                             <ContextMenuItem icon={mdiWeb} label={t("servers.contextMenu.openBrowser")}
                                              onClick={connectBrowser} />
                         )}

@@ -151,6 +151,7 @@ static const char* session_type_to_protocol(session_type_t type) {
     switch (type) {
         case SESSION_TYPE_VNC:    return "vnc";
         case SESSION_TYPE_RDP:    return "rdp";
+        case SESSION_TYPE_SPICE:  return "spice";
         case SESSION_TYPE_SSH:    return "ssh";
         case SESSION_TYPE_TELNET: return "telnet";
         case SESSION_TYPE_DEMO:   return "demo";
@@ -321,11 +322,12 @@ static void* guac_session_thread(void* arg) {
         return NULL;
     }
 
-    /* RDP/VNC targets reached through jump hosts are exposed on a local
+    /* RDP/VNC/SPICE targets reached through jump hosts are exposed on a local
      * loopback port; the server then points guac at 127.0.0.1:local_port.
      * Web sessions build their own SSH jump chain in nexterm_web_prepare. */
     jump_tunnel_t* tunnel = NULL;
-    if (session->type == SESSION_TYPE_RDP || session->type == SESSION_TYPE_VNC) {
+    if (session->type == SESSION_TYPE_RDP || session->type == SESSION_TYPE_VNC
+            || session->type == SESSION_TYPE_SPICE) {
         jump_host_t jump_hosts[MAX_JUMP_HOSTS];
         int jump_count = nexterm_extract_jump_hosts(session, jump_hosts, MAX_JUMP_HOSTS);
 

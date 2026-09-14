@@ -83,6 +83,7 @@ static session_type_t map_session_type(Nexterm_ControlPlane_SessionType_enum_t t
         case Nexterm_ControlPlane_SessionType_WebSocket: return SESSION_TYPE_WEBSOCKET;
         case Nexterm_ControlPlane_SessionType_Demo:   return SESSION_TYPE_DEMO;
         case Nexterm_ControlPlane_SessionType_Web:    return SESSION_TYPE_WEB;
+        case Nexterm_ControlPlane_SessionType_SPICE:  return SESSION_TYPE_SPICE;
         default: return SESSION_TYPE_VNC;
     }
 }
@@ -93,6 +94,7 @@ static int start_session_connection(nexterm_session_t* session,
     switch (stype) {
         case SESSION_TYPE_VNC:
         case SESSION_TYPE_RDP:
+        case SESSION_TYPE_SPICE:
         case SESSION_TYPE_DEMO:
         case SESSION_TYPE_WEB:
             return nexterm_connection_start_guac(session, cp);

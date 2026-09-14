@@ -41,6 +41,7 @@ enum SessionType : byte {
     WebSocket = 6,
     Demo = 7,
     Web = 8,
+    SPICE = 9,
 }
 
 enum ErrorCode : byte {

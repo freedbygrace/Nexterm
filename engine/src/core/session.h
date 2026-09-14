@@ -19,6 +19,7 @@ typedef enum {
     SESSION_TYPE_WEBSOCKET,
     SESSION_TYPE_DEMO,
     SESSION_TYPE_WEB,
+    SESSION_TYPE_SPICE,
 } session_type_t;
 
 typedef enum {

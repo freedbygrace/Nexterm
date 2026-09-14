@@ -1,0 +1,169 @@
+@use "@/common/styles/colors"
+@use "@/common/styles/breakpoints"
+
+.file-flyout
+  position: relative
+  display: flex
+  flex-direction: column
+  flex-shrink: 0
+  height: 100%
+  min-width: 0
+  box-sizing: border-box
+  background-color: colors.$background
+  border-left: 1px solid colors.$dark-gray
+  overflow: hidden
+  transition: width 0.15s ease
+
+  &.resizing
+    transition: none
+    user-select: none
+
+  // Retracted keeps the session and the directory; only the panel is out of the way.
+  &.retracted
+    width: 0
+    border-left: none
+
+  @media (max-width: breakpoints.$mobile)
+    position: absolute
+    top: 0
+    right: 0
+    z-index: 5
+    width: 100% !important
+    box-shadow: colors.$shadow-lg
+
+  .file-flyout-resizer
+    position: absolute
+    top: 0
+    left: 0
+    width: 5px
+    height: 100%
+    cursor: col-resize
+    z-index: 2
+
+    &:hover
+      background-color: colors.$primary-opacity
+
+    @media (max-width: breakpoints.$mobile)
+      display: none
+
+  .file-flyout-header
+    display: flex
+    align-items: center
+    justify-content: space-between
+    gap: 0.5rem
+    padding: 0.5rem 0.5rem 0.5rem 0.75rem
+    border-bottom: 1px solid colors.$dark-gray
+    flex-shrink: 0
+
+    .file-flyout-title
+      display: flex
+      align-items: center
+      gap: 0.5rem
+      color: colors.$white
+      font-size: 0.85rem
+      font-weight: 600
+      white-space: nowrap
+
+      svg
+        width: 1rem
+        height: 1rem
+        color: colors.$primary
+
+    .file-flyout-retract
+      display: flex
+      align-items: center
+      justify-content: center
+      width: 1.6rem
+      height: 1.6rem
+      padding: 0
+      border: none
+      border-radius: 0.4rem
+      cursor: pointer
+      background-color: transparent
+      color: colors.$subtext
+
+      svg
+        width: 1.1rem
+        height: 1.1rem
+
+      &:hover
+        background-color: colors.$gray
+        color: colors.$white
+
+  .file-flyout-body
+    flex: 1
+    min-height: 0
+    position: relative
+    display: flex
+
+    > *
+      flex: 1
+      min-width: 0
+
+  .file-flyout-loading,
+  .file-flyout-error
+    margin: auto
+    padding: 1rem
+    color: colors.$subtext
+    font-size: 0.85rem
+    text-align: center
+
+  .file-flyout-error
+    display: flex
+    flex-direction: column
+    align-items: center
+    gap: 0.75rem
+
+    p
+      margin: 0
+      color: colors.$error
+
+    button
+      display: inline-flex
+      align-items: center
+      gap: 0.4rem
+      padding: 0.4rem 0.75rem
+      border: 1px solid colors.$gray
+      border-radius: 0.5rem
+      background-color: transparent
+      color: colors.$white
+      cursor: pointer
+      font-family: inherit
+      font-size: 0.8rem
+
+      svg
+        width: 0.9rem
+        height: 0.9rem
+
+      &:hover
+        background-color: colors.$gray
+
+// The handle that brings the panel back, on the right edge of the terminal.
+.file-flyout-handle
+  position: absolute
+  top: 50%
+  right: 0
+  transform: translateY(-50%)
+  display: flex
+  align-items: center
+  justify-content: center
+  width: 1.1rem
+  height: 3.5rem
+  padding: 0
+  border: 1px solid colors.$dark-gray
+  border-right: none
+  border-radius: 0.5rem 0 0 0.5rem
+  background-color: colors.$lighter-background
+  color: colors.$subtext
+  cursor: pointer
+  opacity: 0.55
+  transition: opacity 0.15s ease, color 0.15s ease
+  z-index: 4
+
+  svg
+    width: 0.9rem
+    height: 0.9rem
+
+  &:hover
+    opacity: 1
+    color: colors.$primary

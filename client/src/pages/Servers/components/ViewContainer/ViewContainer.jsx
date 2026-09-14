@@ -449,6 +449,7 @@ export const ViewContainer = ({
                                       terminalRefs={terminalRefs} broadcastSessionIds={activeGroupSessionIds}
                                       updateProgress={updateSessionProgress}
                                       layoutMode={layoutMode} onBroadcastToggle={toggleBroadcastMode}
+                                      setOpenFileEditors={setOpenFileEditors}
                                       onFullscreenToggle={toggleFullscreenMode} />;
             case "sftp":
                 return <FileRenderer session={session} disconnectFromServer={disconnectFromServer}

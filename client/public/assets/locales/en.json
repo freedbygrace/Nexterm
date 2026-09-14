@@ -2208,6 +2208,15 @@
         "error": "An error occurred"
       }
     },
+    "fileFlyout": {
+      "title": "Files",
+      "open": "Show files",
+      "expand": "Show files",
+      "retract": "Hide files",
+      "connecting": "Opening the file panel…",
+      "error": "Could not open the file panel",
+      "retry": "Try again"
+    },
     "browser": {
       "back": "Back",
       "forward": "Forward",

@@ -8,13 +8,16 @@ import { usePreferences } from "@/common/contexts/PreferencesContext.jsx";
 import { FitAddon } from "@xterm/addon-fit";
 import { ContextMenu, ContextMenuItem, ContextMenuSeparator, useContextMenu } from "@/common/components/ContextMenu";
 import AIAssistant from "./components/AIAssistant";
+import FileFlyout from "./components/FileFlyout";
+import { hasProtocol } from "@/common/utils/ProtocolUtil.js";
 import CommandSuggestion from "./components/CommandSuggestion";
 import SnippetsMenu from "./components/SnippetsMenu";
 import PasswordFillHint from "./components/PasswordFillHint";
 import TypingIndicators from "./components/TypingIndicators";
 import { useLiveSessions } from "@/common/contexts/LiveSessionContext.jsx";
 import { createProgressParser } from "../utils/progressParser";
-import { mdiContentCopy, mdiContentPaste, mdiCodeBrackets, mdiSelectAll, mdiDelete, mdiKeyboard, mdiKey, mdiFolderOpen, mdiRobotHappyOutline, mdiAutoFix } from "@mdi/js";
+import Icon from "@mdi/react";
+import { mdiContentCopy, mdiContentPaste, mdiCodeBrackets, mdiSelectAll, mdiDelete, mdiKeyboard, mdiKey, mdiChevronLeft, mdiFolderOpen, mdiRobotHappyOutline, mdiAutoFix } from "@mdi/js";
 import { useTranslation } from "react-i18next";
 import ConnectionLoader from "./components/ConnectionLoader";
 import ConnectionError, { mapConnectionError } from "./components/ConnectionError";
@@ -32,7 +35,7 @@ const MAX_ZOOM_FONT_SIZE = 40;
 
 const clampFontSize = (size) => Math.min(MAX_ZOOM_FONT_SIZE, Math.max(MIN_ZOOM_FONT_SIZE, size));
 
-const XtermRenderer = ({ session, disconnectFromServer, reconnectSession, reconnectNow, markSessionConnected, reconnectInfo, markSessionErrored, getSessionError, registerTerminalRef, broadcastMode, terminalRefs, broadcastSessionIds, updateProgress, layoutMode, onBroadcastToggle, onFullscreenToggle, isShared = false, onOpenSftp }) => {
+const XtermRenderer = ({ session, disconnectFromServer, reconnectSession, reconnectNow, markSessionConnected, reconnectInfo, markSessionErrored, getSessionError, registerTerminalRef, broadcastMode, terminalRefs, broadcastSessionIds, updateProgress, layoutMode, onBroadcastToggle, onFullscreenToggle, isShared = false, onOpenSftp, setOpenFileEditors }) => {
     const ref = useRef(null);
     const termRef = useRef(null);
     // Working directory reported by the shell through OSC 7 (file://host/path), when it emits it.
@@ -70,6 +73,8 @@ const XtermRenderer = ({ session, disconnectFromServer, reconnectSession, reconn
     const { getParsedKeybind } = useKeymaps();
     const { t } = useTranslation();
     const [showAIAssistant, setShowAIAssistant] = useState(false);
+    // The file manager docked beside this terminal, rather than in a tab of its own.
+    const [filesOpen, setFilesOpen] = useState(false);
     const [suggestion, setSuggestion] = useState(null);
     const [suggestionAnchor, setSuggestionAnchor] = useState(null);
     const suggestionRef = useRef(null);
@@ -204,6 +209,27 @@ const XtermRenderer = ({ session, disconnectFromServer, reconnectSession, reconn
     }, [session.id, updateProgress]);
 
     const toggleAIAssistant = () => setShowAIAssistant((visible) => !visible);
+
+    // The panel opens where the shell is, when the shell has told us (OSC 7).
+    const currentShellPath = useCallback(() => shellPathRef.current || undefined, []);
+    // Only where the entry actually has SFTP: a Telnet or Proxmox console has no file channel.
+    const supportsFiles = !isShared && session?.server?.type === "server" && hasProtocol(session.server, "sftp");
+
+    const toggleFiles = () => {
+        contextMenu.close();
+        setFilesOpen(open => !open);
+    };
+
+    /**
+     * "Open terminal here" in the panel means this terminal: the directory is sent as a cd on the
+     * same channel as typing, so it runs even where a bracketed paste would not.
+     */
+    const changeDirectory = useCallback((path) => {
+        const ws = wsRef.current;
+        if (!path || ws?.readyState !== WebSocket.OPEN) return;
+        ws.send(`cd '${String(path).replace(/'/g, "'\\''")}'\r`);
+        termRef.current?.focus();
+    }, []);
 
     const handleOpenAIAssistant = () => {
         contextMenu.close();
@@ -830,7 +856,8 @@ const XtermRenderer = ({ session, disconnectFromServer, reconnectSession, reconn
     }, [sessionToken, effectiveFont, effectiveFontSize, cursorStyle, cursorBlink, selectedTheme, isShared]);
 
     return (
-        <div className="xterm-container" onContextMenu={!isShared ? handleContextMenu : undefined}>
+        <div className={`xterm-container${filesOpen ? " with-files" : ""}`}
+             onContextMenu={!isShared ? handleContextMenu : undefined}>
             <ConnectionLoader onReady={(loader) => { connectionLoaderRef.current = loader; }} />
             {connectionError && (
                 <ConnectionError message={connectionError} onClose={() => disconnectFromServer(session.id)}
@@ -838,6 +865,17 @@ const XtermRenderer = ({ session, disconnectFromServer, reconnectSession, reconn
                                  reconnectInfo={reconnectInfo} />
             )}
             <div ref={ref} className="xterm-wrapper" />
+            {supportsFiles && (
+                <FileFlyout session={session} open={filesOpen} onClose={() => setFilesOpen(false)}
+                            getStartPath={currentShellPath} setOpenFileEditors={setOpenFileEditors}
+                            onOpenTerminal={changeDirectory} />
+            )}
+            {supportsFiles && !filesOpen && (
+                <button type="button" className="file-flyout-handle" onClick={() => setFilesOpen(true)}
+                        title={t("servers.fileFlyout.expand")}>
+                    <Icon path={mdiChevronLeft} />
+                </button>
+            )}
             <TypingIndicators anchor={cursorAnchor} participants={typingParticipants} />
             {!isShared && passwordPrompt && passwordIdentities.length > 0 && (
                 <PasswordFillHint
@@ -937,15 +975,20 @@ const XtermRenderer = ({ session, disconnectFromServer, reconnectSession, reconn
                             onClick={handleCopyPath}
                         />
                     )}
+                    {(supportsFiles || onOpenSftp) && <ContextMenuSeparator />}
+                    {supportsFiles && (
+                        <ContextMenuItem
+                            icon={mdiFolderOpen}
+                            label={t(filesOpen ? 'servers.fileFlyout.retract' : 'servers.fileFlyout.open')}
+                            onClick={toggleFiles}
+                        />
+                    )}
                     {onOpenSftp && (
-                        <>
-                            <ContextMenuSeparator />
-                            <ContextMenuItem
-                                icon={mdiFolderOpen}
-                                label={t('servers.tabs.contextMenu.openSftp')}
-                                onClick={() => { contextMenu.close(); onOpenSftp(shellPathRef.current || undefined); }}
-                            />
-                        </>
+                        <ContextMenuItem
+                            icon={mdiFolderOpen}
+                            label={t('servers.tabs.contextMenu.openSftp')}
+                            onClick={() => { contextMenu.close(); onOpenSftp(shellPathRef.current || undefined); }}
+                        />
                     )}
                 </ContextMenu>
             )}

@@ -66,6 +66,13 @@
         &:hover
           border-color: colors.$gray
 
+        &.disabled
+          border-color: colors.$warning-opacity
+
+          .identity-icon
+            color: colors.$warning
+            opacity: 0.7
+
         .identity-info
           display: flex
           align-items: flex-start
@@ -98,6 +105,26 @@
               font-size: 0.95rem
               font-weight: 600
               word-break: break-word
+
+            .identity-heading
+              display: flex
+              align-items: center
+              gap: 0.5rem
+              flex-wrap: wrap
+              margin-bottom: 0.5rem
+
+              h3
+                margin: 0
+
+            .identity-disabled-badge
+              background-color: colors.$warning-opacity
+              color: colors.$warning
+              padding: 0.125rem 0.5rem
+              border-radius: 0.75rem
+              font-size: 0.7rem
+              font-weight: 600
+              text-transform: uppercase
+              letter-spacing: 0.03em
 
             .identity-username
               margin: 0 0 0.625rem 0
@@ -139,6 +166,10 @@
             &:hover
               background-color: colors.$gray
               color: colors.$white
+
+            &.disable-btn:hover
+              background-color: colors.$warning-opacity
+              color: colors.$warning
 
             &.delete-btn:hover
               background-color: colors.$error-opacity

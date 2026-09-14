@@ -2,9 +2,19 @@ import { useContext, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { UserContext } from "@/common/contexts/UserContext.jsx";
 import { Permission } from "@/common/utils/permissions.js";
-import { deleteRequest, getRequest } from "@/common/utils/RequestUtil.js";
+import { deleteRequest, getRequest, postRequest } from "@/common/utils/RequestUtil.js";
 import { useToast } from "@/common/contexts/ToastContext.jsx";
-import { mdiAccount, mdiAccountOutline, mdiCancel, mdiCloudKeyOutline, mdiDomain, mdiFingerprint, mdiPlus } from "@mdi/js";
+import {
+    mdiAccount,
+    mdiAccountOutline,
+    mdiCancel,
+    mdiCloudKeyOutline,
+    mdiDomain,
+    mdiFingerprint,
+    mdiKeyRemove,
+    mdiKeyStar,
+    mdiPlus,
+} from "@mdi/js";
 import Icon from "@mdi/react";
 import Button from "@/common/components/Button";
 import SelectBox from "@/common/components/SelectBox";
@@ -25,7 +35,7 @@ export const tokenState = (token) => {
     return "active";
 };
 
-export const TokenCard = ({ token, scopeLabel, onRevoke, canManage }) => {
+export const TokenCard = ({ token, scopeLabel, onRevoke, onToggleKey, canManage }) => {
     const { t } = useTranslation();
     const state = tokenState(token);
 
@@ -63,19 +73,31 @@ export const TokenCard = ({ token, scopeLabel, onRevoke, canManage }) => {
                     </div>
 
                     {token.fingerprint && (
-                        <p className="token-fingerprint" title={t("settings.enrollment.fields.fingerprint")}>
-                            <Icon path={mdiFingerprint} size={0.6} />{token.fingerprint}
+                        <p className={`token-fingerprint${token.identityDisabled ? " key-disabled" : ""}`}
+                           title={t("settings.enrollment.fields.fingerprint")}>
+                            <Icon path={token.identityDisabled ? mdiKeyRemove : mdiFingerprint} size={0.6} />
+                            {token.fingerprint}
+                            {token.identityDisabled && (
+                                <span className="key-state">{t("settings.enrollment.keyDisabled")}</span>
+                            )}
                         </p>
                     )}
                 </div>
             </div>
 
-            {canManage && state !== "revoked" && (
+            {canManage && (
                 <div className="token-actions">
-                    <button className="action-btn revoke-btn" onClick={() => onRevoke(token)}
-                            title={t("settings.enrollment.revoke")}>
-                        <Icon path={mdiCancel} size={0.8} />
+                    {/* The key outlives the token, so its state is toggled on its own. */}
+                    <button className="action-btn key-btn" onClick={() => onToggleKey(token)}
+                            title={t(token.identityDisabled ? "settings.enrollment.enableKey" : "settings.enrollment.disableKey")}>
+                        <Icon path={token.identityDisabled ? mdiKeyStar : mdiKeyRemove} size={0.8} />
                     </button>
+                    {state !== "revoked" && (
+                        <button className="action-btn revoke-btn" onClick={() => onRevoke(token)}
+                                title={t("settings.enrollment.revoke")}>
+                            <Icon path={mdiCancel} size={0.8} />
+                        </button>
+                    )}
                 </div>
             )}
         </div>
@@ -134,6 +156,19 @@ export const EnrollmentPage = () => {
         loadTokens(selectedScope);
     };
 
+    /** Disabling the key is what stops connections to hosts that already enrolled. */
+    const toggleKey = async (token) => {
+        try {
+            await postRequest(`identities/${token.identityId}/disabled`, { disabled: !token.identityDisabled });
+            sendToast(t("common.success"),
+                t(token.identityDisabled ? "settings.enrollment.keyEnabledSuccess" : "settings.enrollment.keyDisabledSuccess"));
+        } catch (error) {
+            sendToast(t("common.error"), error.message || t("settings.enrollment.keyStateError"));
+        }
+
+        loadTokens(selectedScope);
+    };
+
     const handleRevokeConfirm = async () => {
         const token = revokeDialog.token;
         setRevokeDialog({ open: false, token: null });
@@ -170,7 +205,8 @@ export const EnrollmentPage = () => {
                 <div className="tokens-grid">
                     {tokens.length > 0 ? tokens.map(token => (
                         <TokenCard key={token.id} token={token} scopeLabel={scopeLabel(token)} canManage={canManage}
-                                   onRevoke={(target) => setRevokeDialog({ open: true, token: target })} />
+                                   onRevoke={(target) => setRevokeDialog({ open: true, token: target })}
+                                   onToggleKey={toggleKey} />
                     )) : (
                         <div className="no-tokens">
                             <Icon path={mdiCloudKeyOutline} />

@@ -3,9 +3,9 @@ import { useTranslation } from "react-i18next";
 import { IdentityContext } from "@/common/contexts/IdentityContext.jsx";
 import { UserContext } from "@/common/contexts/UserContext.jsx";
 import { Permission } from "@/common/utils/permissions.js";
-import { deleteRequest, getRequest } from "@/common/utils/RequestUtil.js";
+import { deleteRequest, getRequest, postRequest } from "@/common/utils/RequestUtil.js";
 import { useToast } from "@/common/contexts/ToastContext.jsx";
-import { mdiPlus, mdiTrashCan, mdiPencil, mdiKey, mdiAccount, mdiDomain } from "@mdi/js";
+import { mdiPlus, mdiTrashCan, mdiPencil, mdiKey, mdiAccount, mdiDomain, mdiCancel, mdiCheckCircleOutline } from "@mdi/js";
 import Icon from "@mdi/react";
 import Button from "@/common/components/Button";
 import SelectBox from "@/common/components/SelectBox";
@@ -13,7 +13,7 @@ import { ActionConfirmDialog } from "@/common/components/ActionConfirmDialog/Act
 import IdentityDialog from "./components/IdentityDialog";
 import "./styles.sass";
 
-export const IdentityCard = ({ identity, onEdit, onDelete }) => {
+export const IdentityCard = ({ identity, onEdit, onDelete, onToggleDisabled }) => {
     const { t } = useTranslation();
     
     const getIdentityTypeLabel = (type) => {
@@ -24,16 +24,25 @@ export const IdentityCard = ({ identity, onEdit, onDelete }) => {
     };
     
     return (
-        <div className="identity-card">
+        <div className={`identity-card${identity.disabled ? " disabled" : ""}`}>
             <div className="identity-info">
                 <Icon path={mdiKey} className="identity-icon" />
                 <div className="identity-details">
-                    <h3>{identity.name}</h3>
+                    <div className="identity-heading">
+                        <h3>{identity.name}</h3>
+                        {identity.disabled && (
+                            <span className="identity-disabled-badge">{t("settings.identities.disabledBadge")}</span>
+                        )}
+                    </div>
                     <p className="identity-username">{identity.username || t("settings.identities.noUsername")}</p>
                     <span className="identity-type">{getIdentityTypeLabel(identity.type)}</span>
                 </div>
             </div>
             <div className="identity-actions">
+                <button className="action-btn disable-btn" onClick={() => onToggleDisabled(identity)}
+                        title={identity.disabled ? t("settings.identities.enableIdentity") : t("settings.identities.disableIdentity")}>
+                    <Icon path={identity.disabled ? mdiCheckCircleOutline : mdiCancel} size={0.8} />
+                </button>
                 <button className="action-btn edit-btn" onClick={() => onEdit(identity)} title={t("settings.identities.editIdentity")}>
                     <Icon path={mdiPencil} size={0.8} />
                 </button>
@@ -54,6 +63,7 @@ export const IdentitiesPage = () => {
     const [dialogOpen, setDialogOpen] = useState(false);
     const [editingIdentity, setEditingIdentity] = useState(null);
     const [deleteConfirmDialog, setDeleteConfirmDialog] = useState({ open: false, identity: null });
+    const [disableConfirmDialog, setDisableConfirmDialog] = useState({ open: false, identity: null });
     const [organizations, setOrganizations] = useState([]);
     const [selectedScope, setSelectedScope] = useState(null);
 
@@ -108,6 +118,28 @@ export const IdentitiesPage = () => {
         setDeleteConfirmDialog({ open: true, identity });
     };
 
+    const setDisabled = async (identity, disabled) => {
+        try {
+            await postRequest(`identities/${identity.id}/disabled`, { disabled });
+            sendToast(t("common.success"), t(disabled ? "settings.identities.disableSuccess" : "settings.identities.enableSuccess"));
+            loadIdentities();
+        } catch (error) {
+            sendToast(t("common.error"), error.message || t("settings.identities.disableError"));
+        }
+    };
+
+    // Enabling needs no warning; disabling cuts off every connection that uses the identity.
+    const handleToggleDisabled = (identity) => {
+        if (identity.disabled) return setDisabled(identity, false);
+        setDisableConfirmDialog({ open: true, identity });
+    };
+
+    const handleDisableConfirm = async () => {
+        const identity = disableConfirmDialog.identity;
+        setDisableConfirmDialog({ open: false, identity: null });
+        await setDisabled(identity, true);
+    };
+
     const handleDeleteConfirm = async () => {
         const identity = deleteConfirmDialog.identity;
 
@@ -148,7 +180,8 @@ export const IdentitiesPage = () => {
                     {filteredIdentities.length > 0 ? (
                             filteredIdentities.map((identity) => <IdentityCard key={identity.id} identity={identity}
                                                                        onEdit={handleEdit}
-                                                                       onDelete={handleDeleteRequest} />)
+                                                                       onDelete={handleDeleteRequest}
+                                                                       onToggleDisabled={handleToggleDisabled} />)
                         ) :
                         <div className="no-identities">
                             <Icon path={mdiKey} />
@@ -170,6 +203,12 @@ export const IdentitiesPage = () => {
                                  setOpen={(open) => setDeleteConfirmDialog(prev => ({ ...prev, open }))}
                                  onConfirm={handleDeleteConfirm}
                                  text={t("settings.identities.deleteConfirm", { name: deleteConfirmDialog.identity?.name })}
+            />
+
+            <ActionConfirmDialog open={disableConfirmDialog.open}
+                                 setOpen={(open) => setDisableConfirmDialog(prev => ({ ...prev, open }))}
+                                 onConfirm={handleDisableConfirm}
+                                 text={t("settings.identities.disableConfirm", { name: disableConfirmDialog.identity?.name })}
             />
         </div>
     );

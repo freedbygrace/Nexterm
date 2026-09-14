@@ -64,9 +64,10 @@ int guac_spice_user_join_handler(guac_user* user, int argc, char** argv) {
         /* Store owner's settings at client level */
         spice_client->settings = settings;
 
-        /* Init clipboard */
-        spice_client->clipboard =
-            guac_common_clipboard_alloc(settings->clipboard_buffer_size);
+        /* Init clipboard. The clipboard of this libguac is a fixed
+         * GUAC_COMMON_CLIPBOARD_MAX_LENGTH buffer and takes no size,
+         * so "clipboard-buffer-size" cannot be applied here. */
+        spice_client->clipboard = guac_common_clipboard_alloc();
 
         /* Start client thread */
         if (pthread_create(&spice_client->client_thread, NULL,

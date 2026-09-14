@@ -260,7 +260,7 @@ static void guac_spice_clipboard_selection(SpiceMainChannel* channel,
 
     /* Reject an implausibly large payload rather than passing a size that would
      * wrap negative when narrowed to the int length taken by the clipboard
-     * (the clipboard itself caps the retained data at clipboard-buffer-size) */
+     * (the clipboard itself caps how much of it is retained) */
     if (size > (guint) INT_MAX)
         return;
 

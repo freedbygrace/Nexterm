@@ -1578,6 +1578,8 @@
       "import": "Import",
       "pve": "Proxmox VE",
       "sshConfig": "SSH-Config",
+      "importEntries": "Entries (JSON)",
+      "exportEntries": "Export entries",
       "syncIntegration": "Sync now",
       "syncSuccess": "Integration synced",
       "syncFailed": "Failed to sync integration",
@@ -1842,6 +1844,36 @@
       "actions": {
         "cancel": "Cancel",
         "connect": "Connect"
+      }
+    },
+    "entryImport": {
+      "title": "Import entries",
+      "hint": "Paste or choose a JSON document exported from Nexterm. Existing entries with the same name in the target folder are skipped.",
+      "document": "JSON document",
+      "chooseFile": "Choose file",
+      "placeholder": "{ \"entries\": [ { \"name\": \"build-box\", \"host\": \"10.0.0.5\", \"protocols\": [ \"ssh\" ] } ] }",
+      "dryRunSummary": "Dry run: {{message}}",
+      "columns": {
+        "name": "Name",
+        "host": "Host",
+        "protocols": "Protocols",
+        "folder": "Folder",
+        "status": "Status"
+      },
+      "status": {
+        "created": "Created",
+        "updated": "Updated",
+        "skipped": "Skipped",
+        "error": "Error"
+      },
+      "actions": {
+        "check": "Check",
+        "import": "Import"
+      },
+      "errors": {
+        "invalidJson": "This is not valid JSON",
+        "empty": "The document contains no entries",
+        "failed": "The import failed"
       }
     },
     "sshConfigImport": {

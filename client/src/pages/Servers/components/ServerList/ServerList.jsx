@@ -29,6 +29,8 @@ import {
     mdiStop,
     mdiAccountCircle,
     mdiImport,
+    mdiExport,
+    mdiCodeJson,
     mdiFileDocumentOutline,
     mdiBroadcast,
     mdiPlusCircle,
@@ -99,6 +101,8 @@ export const ServerList = ({
     setCurrentFolderId,
     setProxmoxDialogOpen,
     setSSHConfigImportDialogOpen,
+    setEntryImportDialogOpen,
+    exportEntries,
     setEditServerId,
     connectToServer,
     openSFTP,
@@ -381,6 +385,11 @@ export const ServerList = ({
     const createServer = (protocol) => { setFolderContext(); setServerDialogOpen(protocol); };
     const createPVEServer = () => { setFolderContext(); setProxmoxDialogOpen(); };
     const openSSHConfigImport = () => { setFolderContext(); setSSHConfigImportDialogOpen(); };
+    const openEntryImport = () => { setFolderContext(); setEntryImportDialogOpen(); };
+    const exportScope = () => {
+        if (isOrgFolder) return exportEntries?.({ organizationId: parseInt(contextClickedId.toString().split("-")[1]) });
+        return exportEntries?.(contextClickedId ? { folderId: contextClickedId } : {});
+    };
 
     // Explicit identity > the protocol's configured default > the entry's first identity.
     const getIdentity = (id = null, protocol = null) => {
@@ -688,17 +697,31 @@ export const ServerList = ({
                                         )}
                                     </ContextMenuItem>
                                 )}
-                                {canManageResources && contextClickedType === "folder-object" && !isOrgFolder && !isIntegrationManaged && (
+                                {canManageResources && !isIntegrationManaged && (contextClickedType === null || contextClickedType === "folder-object" || isOrgFolder) && (
                                     <ContextMenuItem
                                         icon={mdiImport}
                                         label={t("servers.contextMenu.import")}
                                     >
                                         <ContextMenuItem
-                                            icon={mdiFileDocumentOutline}
-                                            label={t("servers.contextMenu.sshConfig")}
-                                            onClick={openSSHConfigImport}
+                                            icon={mdiCodeJson}
+                                            label={t("servers.contextMenu.importEntries")}
+                                            onClick={openEntryImport}
                                         />
+                                        {contextClickedType === "folder-object" && !isOrgFolder && (
+                                            <ContextMenuItem
+                                                icon={mdiFileDocumentOutline}
+                                                label={t("servers.contextMenu.sshConfig")}
+                                                onClick={openSSHConfigImport}
+                                            />
+                                        )}
                                     </ContextMenuItem>
+                                )}
+                                {(contextClickedType === null || contextClickedType === "folder-object" || isOrgFolder) && (
+                                    <ContextMenuItem
+                                        icon={mdiExport}
+                                        label={t("servers.contextMenu.exportEntries")}
+                                        onClick={exportScope}
+                                    />
                                 )}
                             </>
                         )}

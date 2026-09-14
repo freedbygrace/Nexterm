@@ -7,6 +7,7 @@ import ServerDialog from "@/pages/Servers/components/ServerDialog";
 import ViewContainer from "@/pages/Servers/components/ViewContainer";
 import ProxmoxDialog from "@/pages/Servers/components/ProxmoxDialog";
 import SSHConfigImportDialog from "@/pages/Servers/components/SSHConfigImportDialog";
+import EntryImportDialog from "@/pages/Servers/components/EntryImportDialog";
 import ConnectionReasonDialog from "@/pages/Servers/components/ConnectionReasonDialog";
 import DirectConnectDialog from "@/pages/Servers/components/DirectConnectDialog";
 import FileEditorWindow from "@/common/components/FileEditorWindow";
@@ -22,7 +23,7 @@ import { StateStreamContext, STATE_TYPES } from "@/common/contexts/StateStreamCo
 import { isTauri } from "@/common/utils/TauriUtil.js";
 import { getTabId, getBrowserId, requiresIdentity, canConnectWithoutPrompt } from "@/common/utils/ConnectionUtil.js";
 import { getRendererForProtocol, getSessionTypeForProtocol, getPrimaryProtocol } from "@/common/utils/ProtocolUtil.js";
-import { postRequest, deleteRequest, patchRequest } from "@/common/utils/RequestUtil";
+import { postRequest, deleteRequest, patchRequest, getRequest } from "@/common/utils/RequestUtil";
 
 let reconnectKeySeq = 0;
 // Stable per-tab key that survives the session-id change on each reconnect.
@@ -35,6 +36,7 @@ export const Servers = () => {
     const [serverDialogProtocol, setServerDialogProtocol] = useState(null);
     const [proxmoxDialogOpen, setProxmoxDialogOpen] = useState(false);
     const [sshConfigImportDialogOpen, setSSHConfigImportDialogOpen] = useState(false);
+    const [entryImportDialogOpen, setEntryImportDialogOpen] = useState(false);
     const [connectionReasonDialogOpen, setConnectionReasonDialogOpen] = useState(false);
     const [directConnectDialogOpen, setDirectConnectDialogOpen] = useState(false);
     const [directConnectProtocol, setDirectConnectProtocol] = useState(null);
@@ -637,6 +639,35 @@ export const Servers = () => {
         setEditServerId(null);
     };
 
+    const closeEntryImportDialog = () => {
+        setEntryImportDialogOpen(false);
+        setCurrentFolderId(null);
+        setCurrentOrganizationId(null);
+    };
+
+    /** Downloads the entries of a folder / organization (or everything) as a JSON document. */
+    const exportEntries = async (scope = {}) => {
+        try {
+            const params = new URLSearchParams();
+            if (scope.folderId) params.set("folderId", scope.folderId);
+            if (scope.organizationId) params.set("organizationId", scope.organizationId);
+            const query = params.toString();
+            const document_ = await getRequest("entries/export" + (query ? `?${query}` : ""));
+
+            const blob = new Blob([JSON.stringify(document_, null, 4)], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = `nexterm-entries-${new Date().toISOString().slice(0, 10)}.json`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error("Failed to export entries", error);
+        }
+    };
+
     const closeSSHConfigImportDialog = () => {
         setSSHConfigImportDialogOpen(false);
         setCurrentFolderId(null);
@@ -711,6 +742,9 @@ export const Servers = () => {
                            currentFolderId={currentFolderId}
                            currentOrganizationId={currentOrganizationId}
                            editServerId={editServerId} />
+            <EntryImportDialog open={entryImportDialogOpen} onClose={closeEntryImportDialog}
+                               currentFolderId={currentFolderId} currentOrganizationId={currentOrganizationId} />
+
             <SSHConfigImportDialog open={sshConfigImportDialogOpen} onClose={closeSSHConfigImportDialog}
                                    currentFolderId={currentFolderId}
                                    currentOrganizationId={currentOrganizationId} />
@@ -735,6 +769,8 @@ export const Servers = () => {
                             connectToServer={connectToServer}
                             setProxmoxDialogOpen={() => setProxmoxDialogOpen(true)}
                             setSSHConfigImportDialogOpen={() => setSSHConfigImportDialogOpen(true)}
+                            setEntryImportDialogOpen={() => setEntryImportDialogOpen(true)}
+                            exportEntries={exportEntries}
                             setCurrentFolderId={setCurrentFolderId} setCurrentOrganizationId={setCurrentOrganizationId}
                             setEditServerId={setEditServerId} openSFTP={openSFTP} openBrowser={openBrowser}
                             hibernatedSessions={hibernatedSessions} resumeSession={resumeConnection}

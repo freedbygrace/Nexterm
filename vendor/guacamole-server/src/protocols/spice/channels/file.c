@@ -489,7 +489,7 @@ int guac_spice_folder_open(guac_spice_folder* folder, const char* path,
     if (folder->open_files >= GUAC_SPICE_FOLDER_MAX_FILES) {
         guac_client_log(folder->client, GUAC_LOG_DEBUG,
                 "%s: Too many open files.",
-                __func__, path);
+                __func__);
         return GUAC_SPICE_FOLDER_ENFILE;
     }
 

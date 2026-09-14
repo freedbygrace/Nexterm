@@ -44,7 +44,6 @@
 #include <spice-client.h>
 
 #include <stdlib.h>
-#include <string.h>
 
 /**
  * GSource callback which periodically checks whether the Guacamole connection
@@ -354,9 +353,16 @@ void* guac_spice_client_thread(void* data) {
     }
 
 #ifdef ENABLE_COMMON_SSH
-    /* Connect via SSH for SFTP, if enabled */
-    if (settings->enable_sftp && guac_spice_start_sftp(client))
+    /* Connect via SSH for SFTP, if enabled. Tear the render thread down on failure;
+     * returning straight away would leak it and leave the connection open. */
+    if (settings->enable_sftp && guac_spice_start_sftp(client)) {
+        if (spice_client->render_thread != NULL) {
+            guac_display_render_thread_destroy(spice_client->render_thread);
+            spice_client->render_thread = NULL;
+        }
+        guac_client_stop(client);
         return NULL;
+    }
 #endif
 
     /* Begin connecting to the SPICE server */

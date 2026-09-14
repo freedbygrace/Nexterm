@@ -47,11 +47,11 @@ void* guac_spice_file_download_monitor(void* data) {
     char file_path[GUAC_SPICE_FOLDER_MAX_PATH];
     const struct inotify_event *event;
 
-    guac_client_log(folder->client, GUAC_LOG_DEBUG, "%s: Starting up file monitor thread.", __func__);
-
     /* If folder has already been freed, or isn't open, yet, don't do anything. */
     if (folder == NULL)
         return NULL;
+
+    guac_client_log(folder->client, GUAC_LOG_DEBUG, "%s: Starting up file monitor thread.", __func__);
 
     download_path[0] = '\0';
     guac_strlcat(download_path, folder->path, GUAC_SPICE_FOLDER_MAX_PATH);
@@ -98,7 +98,7 @@ void* guac_spice_file_download_monitor(void* data) {
             }
 
             guac_client_log(folder->client, GUAC_LOG_ERROR,
-                    "%s: 0x%x - Downloading the file: %s", __func__, event->mask, event->name, event->cookie);
+                    "%s: 0x%x - Downloading the file: %s", __func__, event->mask, event->name);
 
             file_path[0] = '\0';
             guac_strlcat(file_path, "/Download/", GUAC_SPICE_FOLDER_MAX_PATH);

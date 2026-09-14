@@ -20,6 +20,9 @@
 #ifndef GUAC_SPICE_SETTINGS_H
 #define GUAC_SPICE_SETTINGS_H
 
+/* Decides whether the SFTP members below exist; must be included before they are used. */
+#include "config.h"
+
 #include <guacamole/user.h>
 
 #include <stdbool.h>

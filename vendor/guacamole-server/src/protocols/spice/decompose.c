@@ -83,7 +83,7 @@ typedef struct guac_spice_decomposed_key {
  * this table does not have a defined decomposed form (or at least does not
  * have a decomposed form relevant to SPICE).
  */
-guac_spice_decomposed_key guac_spice_decomposed_keys[256] = {
+static guac_spice_decomposed_key guac_spice_decomposed_keys[256] = {
 
     /* ^ */ [0x005E] = { DEAD_CIRCUMFLEX, ' ' },
     /* ` */ [0x0060] = { DEAD_GRAVE,      ' ' },

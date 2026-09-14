@@ -20,6 +20,9 @@
 #ifndef GUAC_SPICE_SPICE_H
 #define GUAC_SPICE_SPICE_H
 
+/* Decides whether the SFTP members below exist; must be included before they are used. */
+#include "config.h"
+
 #include "channels/file.h"
 #include "common/clipboard.h"
 #include "keyboard.h"

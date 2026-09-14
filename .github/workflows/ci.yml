@@ -35,6 +35,9 @@ jobs:
       - name: Generate FlatBuffers bindings
         run: yarn schema:generate
 
+      - name: Run tests
+        run: yarn test
+
       - name: Syntax-check server sources
         run: |
           set -e

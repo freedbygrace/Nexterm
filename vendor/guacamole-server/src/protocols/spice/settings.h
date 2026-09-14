@@ -197,7 +197,10 @@ typedef struct guac_spice_settings {
     int max_secondary_monitors;
 
     /**
-     * The maximum number of bytes to allow within the clipboard.
+     * The maximum number of bytes to allow within the clipboard. Accepted
+     * for compatibility with clients that send it, but not applied: the
+     * clipboard of this libguac is a fixed-size buffer
+     * (GUAC_COMMON_CLIPBOARD_MAX_LENGTH).
      */
     int clipboard_buffer_size;
 

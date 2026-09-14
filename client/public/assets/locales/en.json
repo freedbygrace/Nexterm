@@ -1925,6 +1925,34 @@
     "fileManager": {
       "dropOverlay": "Drop files or folders to upload",
       "dropOverlayHint": "Drop here to upload into {{directory}}, or onto a folder or breadcrumb to upload there",
+      "shortcuts": {
+        "title": "Keyboard shortcuts",
+        "groups": {
+          "navigation": "Navigation",
+          "selection": "Selection",
+          "files": "Files",
+          "other": "Other"
+        },
+        "actions": {
+          "move": "Move through the list",
+          "firstLast": "First / last item",
+          "open": "Open",
+          "up": "Parent folder",
+          "clearSelection": "Clear selection",
+          "selectAll": "Select all",
+          "toggle": "Add to selection",
+          "rename": "Rename",
+          "delete": "Delete",
+          "copy": "Copy",
+          "cut": "Cut",
+          "paste": "Paste",
+          "newFolder": "New folder",
+          "newFile": "New file",
+          "copyPath": "Copy path",
+          "openTerminal": "Open terminal here",
+          "shortcuts": "Show this list"
+        }
+      },
       "upload": {
         "status": "Uploading {{count}} file(s) · {{percent}}%",
         "cancel": "Cancel upload"
@@ -1977,6 +2005,8 @@
         "clearTerminal": "Clear Terminal",
         "properties": "Properties",
         "openTerminal": "Open Terminal Here",
+        "copyPath": "Copy path",
+        "copyCurrentPath": "Copy current path",
         "downloadFolder": "Download Folder",
         "newFile": "New File",
         "newFolder": "New Folder"

@@ -14,6 +14,15 @@ export const useKeyboardNavigation = ({
     handleCut,
     handlePaste,
     handleClick,
+    onRename,
+    onDelete,
+    onNewFile,
+    onNewFolder,
+    onCopyPath,
+    onCopyCurrentPath,
+    onOpenTerminal,
+    onNavigateUp,
+    onShowShortcuts,
 }) => {
     const [focusedIndex, setFocusedIndex] = useState(-1);
 
@@ -49,6 +58,28 @@ export const useKeyboardNavigation = ({
             if (isMod && event.key === 'x') { event.preventDefault(); handleCut(); return; }
             if (isMod && event.key === 'v') { event.preventDefault(); handlePaste(); return; }
             if (isMod && event.key === 'a') { event.preventDefault(); setSelectedItems(filteredItems); return; }
+
+            const focusedItem = focusedIndex >= 0 && focusedIndex < filteredItems.length ? filteredItems[focusedIndex] : null;
+            const actionItem = selectedItems.length > 0 ? selectedItems[0] : focusedItem;
+
+            if (isMod && event.shiftKey && event.key.toLowerCase() === 'c') {
+                event.preventDefault();
+                if (selectedItems.length > 0 || focusedItem) onCopyPath?.();
+                else onCopyCurrentPath?.();
+                return;
+            }
+            if (isMod && event.shiftKey && event.key.toLowerCase() === 'n') { event.preventDefault(); onNewFolder?.(); return; }
+            if (isMod && event.altKey && event.key.toLowerCase() === 'n') { event.preventDefault(); onNewFile?.(); return; }
+            if (isMod && event.key.toLowerCase() === 't') { event.preventDefault(); onOpenTerminal?.(); return; }
+
+            if (event.key === 'F2' && actionItem) { event.preventDefault(); onRename?.(actionItem); return; }
+            if (event.key === 'Delete' && (selectedItems.length > 0 || focusedItem)) { event.preventDefault(); onDelete?.(); return; }
+            if ((event.key === 'Backspace' && !isMod) || (event.altKey && event.key === 'ArrowLeft')) {
+                event.preventDefault();
+                onNavigateUp?.();
+                return;
+            }
+            if (event.key === '?' || (isMod && event.key === '/')) { event.preventDefault(); onShowShortcuts?.(); return; }
 
             if (event.key === 'Escape') {
                 if (selectedItems.length > 0) {
@@ -96,6 +127,7 @@ export const useKeyboardNavigation = ({
         return () => document.removeEventListener('keydown', handleKeyDown);
     }, [
         isActive, renamingItem, creatingFolder, creatingFile, contextMenuOpen, focusedIndex, filteredItems,
+        onRename, onDelete, onNewFile, onNewFolder, onCopyPath, onCopyCurrentPath, onOpenTerminal, onNavigateUp, onShowShortcuts,
         selectedItems, setSelectedItems, handleCopy, handleCut, handlePaste, handleClick,
         scrollItemIntoView, toggleSelection,
     ]);

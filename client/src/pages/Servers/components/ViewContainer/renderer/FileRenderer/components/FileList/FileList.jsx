@@ -8,6 +8,7 @@ import {
 } from "@mdi/js";
 import { ContextMenu, ContextMenuItem, ContextMenuSeparator, useContextMenu } from "@/common/components/ContextMenu";
 import { ActionConfirmDialog } from "@/common/components/ActionConfirmDialog/ActionConfirmDialog.jsx";
+import ShortcutsDialog from "../ShortcutsDialog";
 import { useTranslation } from "react-i18next";
 import { copyToClipboard } from "@/common/utils/clipboard.js";
 import { usePreferences } from "@/common/contexts/PreferencesContext.jsx";
@@ -39,6 +40,7 @@ export const FileList = forwardRef(({
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [massDeleteDialogOpen, setMassDeleteDialogOpen] = useState(false);
     const [selectedItems, setSelectedItems] = useState([]);
+    const [shortcutsOpen, setShortcutsOpen] = useState(false);
     const [propertiesDialogOpen, setPropertiesDialogOpen] = useState(false);
     const [propertiesItem, setPropertiesItem] = useState(null);
     
@@ -108,6 +110,15 @@ export const FileList = forwardRef(({
         isActive, filteredItems, selectedItems, setSelectedItems, itemRefs,
         renamingItem, creatingFolder, creatingFile, contextMenuOpen,
         handleCopy, handleCut, handlePaste, handleClick,
+        onRename: (item) => startRename(item),
+        onDelete: () => handleDeleteClick(),
+        onNewFile: () => startCreateFile(),
+        onNewFolder: () => startCreateFolder(),
+        onCopyPath: () => copySelectedPaths(),
+        onCopyCurrentPath: () => copyPathText(path),
+        onOpenTerminal: () => capabilities.terminal && handleOpenTerminal(path),
+        onNavigateUp: () => updatePath(path.split("/").slice(0, -1).join("/") || "/"),
+        onShowShortcuts: () => setShortcutsOpen(true),
     });
 
     const { isSelecting, selectionBox, handleSelectionStart } = useBoxSelection({
@@ -283,6 +294,8 @@ export const FileList = forwardRef(({
 
             <SelectionActionBar selectedItems={selectedItems} onClearSelection={clearSelection} onDownload={handleMassDownload} onDelete={handleMassDelete} containerRef={containerRef} />
 
+            <ShortcutsDialog open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+
             <ActionConfirmDialog open={bigFileDialogOpen} setOpen={setBigFileDialogOpen} onConfirm={() => setCurrentFile(`${path}/${selectedItem?.name}`)} text={t("servers.fileManager.contextMenu.bigFileConfirm", { size: Math.round(selectedItem?.size / 1024 / 1024) })} />
             <ActionConfirmDialog open={deleteDialogOpen} setOpen={setDeleteDialogOpen} onConfirm={handleDelete} text={t("servers.fileManager.contextMenu.deleteConfirm", { name: selectedItem?.name })} />
             <ActionConfirmDialog open={massDeleteDialogOpen} setOpen={setMassDeleteDialogOpen} onConfirm={executeMassDelete} text={t("servers.fileManager.selection.deleteConfirm", { count: selectedItems.length })} />
@@ -319,6 +332,7 @@ export const FileList = forwardRef(({
                 <ContextMenuItem icon={mdiFilePlus} label={t("servers.fileManager.contextMenu.newFile")} onClick={startCreateFile} />
                 <ContextMenuItem icon={mdiFolderPlus} label={t("servers.fileManager.contextMenu.newFolder")} onClick={startCreateFolder} />
                 <ContextMenuItem icon={mdiContentCopy} label={t("servers.fileManager.contextMenu.copyCurrentPath")} onClick={() => copyPathText(path)} />
+                <ContextMenuItem icon={mdiKeyboard} label={t("servers.fileManager.shortcuts.title")} onClick={() => setShortcutsOpen(true)} />
                 <ContextMenuSeparator />
                 <ContextMenuItem icon={mdiFileDownload} label={t("servers.fileManager.contextMenu.downloadFolder")} onClick={() => downloadFile(path)} />
                 <ContextMenuItem icon={mdiInformationOutline} label={t("servers.fileManager.contextMenu.properties")} onClick={() => handlePropertiesClick(null)} />

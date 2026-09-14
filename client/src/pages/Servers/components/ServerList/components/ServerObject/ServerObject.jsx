@@ -7,11 +7,18 @@ import { useLiveSessions } from "@/common/contexts/LiveSessionContext.jsx";
 import AvatarStack from "@/common/components/AvatarStack";
 import { getSessionOwnerLabel } from "@/common/utils/avatar.js";
 import { useTranslation } from "react-i18next";
-import { useContext, useRef, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import { useDrag, useDrop } from "react-dnd";
 import { patchRequest } from "@/common/utils/RequestUtil.js";
 import { DropIndicator } from "../DropIndicator";
-import { getServerProtocols, PROTOCOL_LABELS } from "@/common/utils/ProtocolUtil.js";
+import { getServerProtocols, getPrimaryProtocol, getProtocolIcon, PROTOCOL_LABELS } from "@/common/utils/ProtocolUtil.js";
+import Tooltip from "@/common/components/Tooltip";
+
+/**
+ * How long the pointer has to rest on an entry before its quick-connect buttons appear. Long enough
+ * that they do not flicker while the pointer crosses the list, short enough to feel immediate.
+ */
+const QUICK_CONNECT_DELAY = 500;
 
 /** "checked just now" / "checked 2 min ago" / "checked 3 h ago" for a status-check timestamp. */
 const formatCheckedAgo = (checkedAt, t) => {
@@ -28,7 +35,9 @@ export const ServerObject = ({ id, name, position, folderId, organizationId, nes
     const { getLiveSessionsForEntry } = useLiveSessions();
     const { t } = useTranslation();
     const [dropPlacement, setDropPlacement] = useState(null);
+    const [quickConnectOpen, setQuickConnectOpen] = useState(false);
     const elementRef = useRef(null);
+    const hoverTimerRef = useRef(null);
 
     const isIntegrationEntry = Boolean(type?.startsWith("pve-"));
 
@@ -95,6 +104,37 @@ export const ServerObject = ({ id, name, position, folderId, organizationId, nes
         connectToServer(server.id, server.identities?.[0]);
     };
 
+    // Each enabled protocol, default first; the identity is left to the server, which picks the one
+    // configured for that protocol (see utils/identityResolver).
+    const quickConnectProtocols = server?.type === "server"
+        ? (() => {
+            const primary = getPrimaryProtocol(server);
+            return [primary, ...getServerProtocols(server).filter(p => p !== primary)].filter(Boolean);
+        })()
+        : [];
+
+    const quickConnect = (event, protocol) => {
+        event.stopPropagation();
+        setQuickConnectOpen(false);
+        connectToServer(server.id, undefined, undefined, null, protocol);
+    };
+
+    const startHover = () => {
+        if (!quickConnectProtocols.length || hoverTimerRef.current) return;
+        hoverTimerRef.current = setTimeout(() => {
+            hoverTimerRef.current = null;
+            setQuickConnectOpen(true);
+        }, QUICK_CONNECT_DELAY);
+    };
+
+    const endHover = () => {
+        clearTimeout(hoverTimerRef.current);
+        hoverTimerRef.current = null;
+        setQuickConnectOpen(false);
+    };
+
+    useEffect(() => () => clearTimeout(hoverTimerRef.current), []);
+
     const noteLine = server?.showNoteInList
         ? (server?.notes || "").split(/\r?\n/)[0].trim()
         : "";
@@ -126,7 +166,8 @@ export const ServerObject = ({ id, name, position, folderId, organizationId, nes
                 dragRef(dropRef(node));
             }}
             onDoubleClick={connect}
-            onMouseLeave={() => setDropPlacement(null)}>
+            onMouseEnter={startHover}
+            onMouseLeave={() => { setDropPlacement(null); endHover(); }}>
             <DropIndicator show={isOver && dropPlacement === 'before'} placement="before" />
             <div className={
                 type && type.startsWith('pve-') 
@@ -143,7 +184,19 @@ export const ServerObject = ({ id, name, position, folderId, organizationId, nes
                 <p className="server-name truncate-text">{name}</p>
                 {noteLine && <span className="server-note truncate-text">{noteLine}</span>}
             </div>
-            {showProtocolChips && (
+            {quickConnectOpen && (
+                <div className="quick-connect">
+                    {quickConnectProtocols.map(p => (
+                        <Tooltip key={p} text={t("servers.quickConnectProtocol", { protocol: PROTOCOL_LABELS[p] || p.toUpperCase() })} delay={250}>
+                            <button type="button" className="quick-connect-btn" onClick={(e) => quickConnect(e, p)}
+                                    onDoubleClick={(e) => e.stopPropagation()}>
+                                <Icon path={getProtocolIcon(p)} />
+                            </button>
+                        </Tooltip>
+                    ))}
+                </div>
+            )}
+            {showProtocolChips && !quickConnectOpen && (
                 <div className="protocol-chips">
                     {protocolChips.map(p => (
                         <span key={p} title={protocolTitle(p)}

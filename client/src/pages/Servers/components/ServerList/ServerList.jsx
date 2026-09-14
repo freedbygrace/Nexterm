@@ -9,7 +9,7 @@ import { IdentityContext } from "@/common/contexts/IdentityContext.jsx";
 import { useScripts } from "@/common/contexts/ScriptContext.jsx";
 import ServerEntries from "./components/ServerEntries.jsx";
 import { isCredentiallessProtocol } from "@/common/utils/ConnectionUtil.js";
-import { getServerProtocols, getPrimaryProtocol, hasProtocol, PROTOCOL_LABELS, FILE_PROTOCOLS, GUAC_PROTOCOLS } from "@/common/utils/ProtocolUtil.js";
+import { getServerProtocols, getPrimaryProtocol, hasProtocol, PROTOCOL_LABELS, FILE_PROTOCOLS, getProtocolIcon } from "@/common/utils/ProtocolUtil.js";
 import { useDevFeature } from "@/common/utils/devFeatures.js";
 import { useBodyClass } from "@/common/hooks/useBodyClass.js";
 import Icon from "@mdi/react";
@@ -406,8 +406,6 @@ export const ServerList = ({
         ? [primaryProtocol, ...getServerProtocols(server).filter(p => p !== primaryProtocol)].filter(Boolean)
         : [];
     const canUseProtocol = (protocol) => server?.identities?.length > 0 || isCredentiallessProtocol(protocol);
-    const protocolIcon = (protocol) => GUAC_PROTOCOLS.includes(protocol) ? mdiMonitor
-        : FILE_PROTOCOLS.includes(protocol) ? mdiFolderNetwork : mdiConsole;
     const connectVia = (protocol, id = null) => {
         if (FILE_PROTOCOLS.includes(protocol)) return openSFTP(server?.id, getIdentity(id, protocol), protocol);
         return connect(id, protocol);
@@ -838,14 +836,14 @@ export const ServerList = ({
                                                 return isCredentiallessProtocol(protocol) || server.identities.length <= 1 ? (
                                                     <ContextMenuItem
                                                         key={protocol}
-                                                        icon={protocolIcon(protocol)}
+                                                        icon={getProtocolIcon(protocol)}
                                                         label={label}
                                                         onClick={() => connectVia(protocol)}
                                                     />
                                                 ) : (
                                                     <ContextMenuItem
                                                         key={protocol}
-                                                        icon={protocolIcon(protocol)}
+                                                        icon={getProtocolIcon(protocol)}
                                                         label={label}
                                                         onClick={() => connectVia(protocol)}
                                                     >

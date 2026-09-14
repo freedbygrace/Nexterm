@@ -1718,6 +1718,7 @@
       "joinSession": "Join Session",
       "joinSessionOf": "Join session of {{user}}"
     },
+    "quickConnectProtocol": "Connect with {{protocol}}",
     "passwordHint": {
       "paste": "paste password",
       "pasteFor": "paste {{username}} password",

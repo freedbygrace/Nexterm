@@ -1,3 +1,5 @@
+import { mdiConsole, mdiFolderNetwork, mdiMonitor } from "@mdi/js";
+
 /**
  * Client-side mirror of server/utils/entryProtocols.js.
  *
@@ -28,6 +30,10 @@ export const PROTOCOL_RENDERERS = {
 export const TERMINAL_PROTOCOLS = ["ssh", "telnet"];
 export const GUAC_PROTOCOLS = ["rdp", "vnc", "spice", "demo"];
 export const FILE_PROTOCOLS = ["sftp", "ftp", "ftps"];
+
+/** The icon a protocol is shown with, wherever it is offered. */
+export const getProtocolIcon = (protocol) => GUAC_PROTOCOLS.includes(protocol) ? mdiMonitor
+    : FILE_PROTOCOLS.includes(protocol) ? mdiFolderNetwork : mdiConsole;
 export const CREDENTIALLESS_PROTOCOLS = ["telnet", "demo"];
 
 /** Protocols the user can pick in the server dialog (demo is dev-only and seeded separately). */

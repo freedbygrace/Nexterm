@@ -91,6 +91,35 @@
     min-width: 0
     padding-bottom: 2px
 
+  // Appears once the pointer has rested on the entry; takes the place of the protocol chips.
+  .quick-connect
+    display: flex
+    align-items: center
+    gap: 0.15rem
+    flex-shrink: 0
+
+    .quick-connect-btn
+      display: flex
+      align-items: center
+      justify-content: center
+      width: 1.35rem
+      height: 1.35rem
+      padding: 0
+      border: none
+      border-radius: 0.35rem
+      cursor: pointer
+      background-color: colors.$gray
+      color: colors.$subtext
+      transition: background-color 0.1s ease, color 0.1s ease
+
+      svg
+        width: 0.85rem
+        height: 0.85rem
+
+      &:hover
+        background-color: colors.$primary
+        color: colors.$white
+
   .protocol-chips
     display: flex
     align-items: center

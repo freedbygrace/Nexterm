@@ -111,6 +111,26 @@ const splitFolderPath = (folderPath) => {
 };
 
 /**
+ * Walks a folder path without creating anything. Returns `{ folder, missing }`: the deepest folder that
+ * exists (null = the parent / scope root itself) and the segments that would still have to be created.
+ */
+module.exports.findFolderPath = async (accountId, folderPath, { parentId = null, organizationId = null } = {}) => {
+    const segments = splitFolderPath(folderPath);
+    let scopeOrganizationId = organizationId || null;
+    let folder = parentId ? await Folder.findByPk(parentId) : null;
+    if (parentId && !folder) return { code: 302, message: "Parent folder does not exist" };
+    if (folder) scopeOrganizationId = folder.organizationId || scopeOrganizationId;
+
+    for (let i = 0; i < segments.length; i++) {
+        const next = await findSiblingFolder(accountId, { name: segments[i], parentId: folder?.id || null, organizationId: scopeOrganizationId });
+        if (!next) return { folder, missing: segments.slice(i) };
+        folder = next;
+    }
+
+    return { folder, missing: [] };
+};
+
+/**
  * Resolves a folder path below `parentId` (or the root of the scope), creating any missing level.
  * Matching is case-insensitive so API clients never produce duplicate folders.
  * Returns the deepest folder, or an error object ({ code, message }).

@@ -4,10 +4,10 @@ const Folder = require("../models/Folder");
 const EntryTag = require("../models/EntryTag");
 const Tag = require("../models/Tag");
 const AuditLog = require("../models/AuditLog");
-const { listFolders, ensureFolderPath } = require("./folder");
+const { listFolders, ensureFolderPath, findFolderPath } = require("./folder");
 const { hasOrganizationAccess, hasOrganizationPermission, hasAccountPermission, validateFolderAccess } = require("../utils/permission");
 const { Permission } = require("../permissions/registry");
-const { Op } = require("sequelize");
+const { Op, fn, col, where: sqlWhere } = require("sequelize");
 const Identity = require("../models/Identity");
 const OrganizationMember = require("../models/OrganizationMember");
 const { listIdentities } = require("./identity");
@@ -17,7 +17,8 @@ const { sendWakeOnLan } = require("../utils/wol");
 const { reorderSiblings } = require("../utils/reposition");
 const stateBroadcaster = require("../lib/StateBroadcaster");
 const SessionManager = require("../lib/SessionManager");
-const { PROTOCOL_RENDERERS, normalizeServerConfig, isProtocolEnabled, getEnabledProtocols, getProtocolPort, getProtocolIdentities } = require("../utils/entryProtocols");
+const { PROTOCOLS, DEFAULT_PORTS, PROTOCOL_RENDERERS, normalizeServerConfig, isProtocolEnabled, getEnabledProtocols, getProtocolPort, getProtocolIdentities } = require("../utils/entryProtocols");
+const { bulkImportEntryValidation } = require("../validations/server");
 
 const validateEntryAccess = async (accountId, entry, errorMessage = "You don't have permission to access this entry", requiredPermission = null) => {
     if (!entry) return { code: 401, message: "Entry does not exist" };
@@ -580,6 +581,262 @@ module.exports.importSSHConfig = async (accountId, configuration) => {
     return {
         message: `SSH config import: ${results.imported} imported, ${results.skipped} skipped, ${results.errors} errors`,
         ...results
+    };
+};
+
+const BULK_IMPORT_TAG_COLOR = "#3b82f6";
+
+/** Case-insensitive lookup of a server entry by name among the entries of one folder (or the scope root). */
+const findEntryByName = (accountId, name, { folderId = null, organizationId = null }) => Entry.findOne({
+    where: {
+        folderId: folderId || null,
+        type: "server",
+        ...(organizationId ? { organizationId } : { organizationId: null, accountId }),
+        [Op.and]: [sqlWhere(fn("lower", col("name")), String(name).trim().toLowerCase())],
+    },
+    order: [["position", "ASC"], ["id", "ASC"]],
+});
+
+/**
+ * Resolves identity references (ids or names) of one import row against the caller's identities.
+ * Names are matched case-insensitively; when several identities share a name the one in the target
+ * organization wins, then a personal one. Returns `{ ids, unknown }`.
+ */
+const resolveIdentityReferences = (references, accessibleIdentities, organizationId) => {
+    const ids = [];
+    const unknown = [];
+    for (const reference of references || []) {
+        let match = null;
+        if (typeof reference === "number") {
+            match = accessibleIdentities.find(identity => identity.id === reference) || null;
+        } else {
+            const wanted = String(reference).trim().toLowerCase();
+            const candidates = accessibleIdentities.filter(identity => identity.name?.trim().toLowerCase() === wanted);
+            match = candidates.find(identity => organizationId && identity.organizationId === organizationId)
+                || candidates.find(identity => !identity.organizationId)
+                || candidates[0] || null;
+        }
+        if (!match) unknown.push(reference);
+        else if (!ids.includes(match.id)) ids.push(match.id);
+    }
+    return { ids, unknown };
+};
+
+/**
+ * Turns the `protocols` of an import row (a list of names, or a map with per-protocol port/identity)
+ * into the `config.protocols` shape plus the primary protocol. Returns `{ protocols, primary }` or `{ error }`.
+ */
+const buildImportProtocols = (row, resolveIdentity) => {
+    const protocols = {};
+    const listed = [];
+    const unknownIdentities = [];
+
+    if (Array.isArray(row.protocols)) {
+        for (const protocol of row.protocols) {
+            protocols[protocol] = { enabled: true, port: DEFAULT_PORTS[protocol] };
+            listed.push(protocol);
+        }
+    } else {
+        for (const [protocol, value] of Object.entries(row.protocols)) {
+            if (!PROTOCOLS.includes(protocol)) continue;
+            const settings = typeof value === "object" && value !== null ? value : { enabled: Boolean(value) };
+            const enabled = settings.enabled !== false;
+            protocols[protocol] = { enabled, port: settings.port ?? DEFAULT_PORTS[protocol] };
+            if (enabled) listed.push(protocol);
+            if (settings.identity !== undefined && settings.identity !== null && settings.identity !== "") {
+                const identityId = resolveIdentity(settings.identity);
+                if (identityId) protocols[protocol].identityId = identityId;
+                else unknownIdentities.push(settings.identity);
+            }
+        }
+    }
+
+    if (unknownIdentities.length > 0) return { error: `Unknown identity: ${unknownIdentities.join(", ")}` };
+    if (listed.length === 0) return { error: "At least one protocol must be enabled" };
+
+    const primary = row.primary || row.config?.protocol || listed[0];
+    if (!listed.includes(primary)) return { error: `Primary protocol ${primary} is not enabled on this entry` };
+
+    return { protocols, primary };
+};
+
+/**
+ * Bulk import of server entries (POST /entries/import/bulk).
+ *
+ * Every row is validated, resolved and imported on its own: a bad row produces a per-row error and never
+ * aborts the import. Folder paths are resolved below `folderId` (or the root of the personal list / the
+ * organization), identities may be given by id or name, tags by name (missing tags are created), and a row
+ * whose name already exists in its target folder is skipped unless `updateExisting` is set. With `dryRun`
+ * nothing is written; the response then tells what would happen.
+ */
+module.exports.bulkImportEntries = async (accountId, { entries, folderId = null, organizationId = null, dryRun = false, updateExisting = false }) => {
+    if (folderId) {
+        const folderCheck = await validateFolderAccess(accountId, folderId, Permission.RESOURCES_MANAGE);
+        if (!folderCheck.valid) return folderCheck.error;
+        organizationId = folderCheck.folder.organizationId || null;
+    }
+
+    if (organizationId) {
+        if (!(await hasOrganizationPermission(accountId, organizationId, Permission.RESOURCES_MANAGE))) {
+            return { code: 403, message: "You don't have permission to manage resources in this organization" };
+        }
+    } else if (!(await hasAccountPermission(accountId, Permission.RESOURCES_MANAGE))) {
+        return { code: 403, message: "You don't have permission to manage resources" };
+    }
+
+    const accessibleIdentities = await listIdentities(accountId);
+    const tags = await Tag.findAll({ where: { accountId } });
+    const tagsByName = new Map(tags.map(tag => [tag.name.trim().toLowerCase(), tag]));
+    const folderCache = new Map();
+    const seenNames = new Map();
+
+    const resolveTags = async (names) => {
+        const ids = [];
+        for (const name of names || []) {
+            const key = name.trim().toLowerCase();
+            let tag = tagsByName.get(key);
+            if (!tag) {
+                tag = dryRun
+                    ? { id: null, name: name.trim(), color: BULK_IMPORT_TAG_COLOR }
+                    : await Tag.create({ accountId, name: name.trim(), color: BULK_IMPORT_TAG_COLOR });
+                tagsByName.set(key, tag);
+            }
+            if (tag.id && !ids.includes(tag.id)) ids.push(tag.id);
+        }
+        return ids;
+    };
+
+    const folderPathKey = (folderPath) => {
+        const segments = Array.isArray(folderPath) ? folderPath : String(folderPath || "").split(/[\/]+/);
+        return segments.map(s => String(s).trim().toLowerCase()).filter(Boolean).join("/");
+    };
+
+    // Target folder of a row: the base folder, or `folderPath` below it (created on demand unless dryRun).
+    const resolveTargetFolder = async (folderPath) => {
+        const key = folderPathKey(folderPath);
+        if (!key) return { folderId: folderId || null, missing: [] };
+        if (folderCache.has(key)) return folderCache.get(key);
+
+        let resolved;
+        if (dryRun) {
+            const found = await findFolderPath(accountId, folderPath, { parentId: folderId, organizationId });
+            if (found?.code) return found;
+            resolved = { folderId: found.missing.length ? null : found.folder?.id || null, missing: found.missing };
+        } else {
+            const folder = await ensureFolderPath(accountId, folderPath, { parentId: folderId, organizationId });
+            if (folder?.code) return folder;
+            resolved = { folderId: folder?.id || folderId || null, missing: [] };
+        }
+        folderCache.set(key, resolved);
+        return resolved;
+    };
+
+    const importRow = async (row, index) => {
+        const nameKey = `${folderPathKey(row.folderPath)}|${row.name.trim().toLowerCase()}`;
+        if (seenNames.has(nameKey)) return { status: "skipped", message: `Duplicate of row ${seenNames.get(nameKey) + 1} in this import` };
+        seenNames.set(nameKey, index);
+
+        const identities = resolveIdentityReferences(row.identities, accessibleIdentities, organizationId);
+        if (identities.unknown.length > 0) return { status: "error", message: `Unknown identity: ${identities.unknown.join(", ")}` };
+
+        const built = buildImportProtocols(row, (reference) =>
+            resolveIdentityReferences([reference], accessibleIdentities, organizationId).ids[0] || null);
+        if (built.error) return { status: "error", message: built.error };
+
+        // A protocol-specific identity has to be linked to the entry as well.
+        for (const protocol of Object.values(built.protocols)) {
+            if (protocol.identityId && !identities.ids.includes(protocol.identityId)) identities.ids.push(protocol.identityId);
+        }
+
+        const target = await resolveTargetFolder(row.folderPath);
+        if (target?.code) return { status: "error", message: target.message };
+
+        const { protocol: _protocol, protocols: _protocols, ...extraConfig } = row.config || {};
+        const config = normalizeServerConfig({
+            ...extraConfig,
+            ip: row.host,
+            protocol: built.primary,
+            protocols: built.protocols,
+            ...(row.notes !== undefined ? { notes: row.notes } : {}),
+            ...(row.monitoring !== undefined ? { monitoringEnabled: row.monitoring } : {}),
+        }, { type: "server" });
+
+        const existing = target.missing.length > 0 ? null
+            : await findEntryByName(accountId, row.name, { folderId: target.folderId, organizationId });
+
+        if (existing && !updateExisting) {
+            return { status: "skipped", id: existing.id, message: "An entry with this name already exists in the target folder" };
+        }
+
+        const tagIds = await resolveTags(row.tags);
+
+        if (existing) {
+            if (dryRun) return { status: "updated", id: existing.id };
+            const result = await module.exports.editEntry(accountId, existing.id, {
+                name: row.name,
+                ...(row.icon ? { icon: row.icon } : {}),
+                identities: identities.ids,
+                config: { ...(existing.config || {}), ...config },
+            });
+            if (result?.code) return { status: "error", message: result.message };
+            for (const tagId of tagIds) {
+                await EntryTag.findOrCreate({ where: { entryId: existing.id, tagId }, defaults: { entryId: existing.id, tagId } });
+            }
+            return { status: "updated", id: existing.id };
+        }
+
+        if (dryRun) {
+            return target.missing.length > 0
+                ? { status: "created", message: `Folder ${target.missing.join("/")} will be created` }
+                : { status: "created" };
+        }
+
+        const entry = await module.exports.createEntry(accountId, {
+            name: row.name,
+            type: "server",
+            icon: row.icon || "server",
+            folderId: target.folderId,
+            organizationId,
+            identities: identities.ids,
+            config,
+        });
+        if (entry?.code) return { status: "error", message: entry.message };
+
+        for (const tagId of tagIds) await EntryTag.create({ entryId: entry.id, tagId });
+        return { status: "created", id: entry.id };
+    };
+
+    const results = [];
+    const counters = { created: 0, updated: 0, skipped: 0, errors: 0 };
+
+    for (let index = 0; index < entries.length; index++) {
+        const raw = entries[index];
+        const { error, value: row } = bulkImportEntryValidation.validate(raw, { errors: { wrap: { label: "" } }, allowUnknown: false });
+        let outcome;
+        if (error) {
+            outcome = { status: "error", message: error.details[0]?.message || "Invalid row" };
+        } else {
+            try {
+                outcome = await importRow(row, index);
+            } catch (err) {
+                logger.error("Bulk import row failed", { index, name: row.name, error: err.message });
+                outcome = { status: "error", message: err.message };
+            }
+        }
+
+        results.push({ index, name: typeof raw?.name === "string" ? raw.name : undefined, ...outcome });
+        counters[outcome.status === "error" ? "errors" : outcome.status]++;
+    }
+
+    logger.info(`Bulk entry import ${dryRun ? "dry run " : ""}completed`, { accountId, organizationId, total: entries.length, ...counters });
+
+    return {
+        message: `Bulk import${dryRun ? " (dry run)" : ""}: ${counters.created} created, ${counters.updated} updated, ${counters.skipped} skipped, ${counters.errors} errors`,
+        dryRun,
+        updateExisting,
+        total: entries.length,
+        ...counters,
+        results,
     };
 };
 

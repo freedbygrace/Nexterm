@@ -96,6 +96,10 @@ const createSession = async (accountId, entryId, identityId, connectionReason, t
         return { code: 403, message: "You don't have access to this identity" };
     }
 
+    if (result.disabled) {
+        return { code: 403, message: "This identity is disabled" };
+    }
+
     if (result.requiresIdentity && !identity) {
         return { code: 400, message: "Identity not found" };
     }

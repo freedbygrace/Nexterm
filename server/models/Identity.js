@@ -34,6 +34,12 @@ module.exports = db.define(
             type: Sequelize.STRING,
             allowNull: true,
         },
+        /** A disabled identity stays intact but is refused for every new session. */
+        disabled: {
+            type: Sequelize.BOOLEAN,
+            allowNull: false,
+            defaultValue: false,
+        },
     },
     {
         freezeTableName: true,

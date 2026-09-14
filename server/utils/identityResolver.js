@@ -35,6 +35,8 @@ const resolveIdentity = async (entry, identityId, directIdentity = null, account
         if (accessibleIds && !accessibleIds.has(identity.id)) {
             return { identity: null, requiresIdentity, accessDenied: true };
         }
+        // Nexterm holds the key, so a disabled identity is refused here rather than handed to the engine.
+        if (identity.disabled) return { identity: null, requiresIdentity, disabled: true };
         return identity;
     }
 
@@ -49,16 +51,20 @@ const resolveIdentity = async (entry, identityId, directIdentity = null, account
     if (protocolIdentityId && entryIdentities.some(ei => ei.identityId === protocolIdentityId)
         && (!accessibleIds || accessibleIds.has(protocolIdentityId))) {
         const identity = await Identity.findByPk(protocolIdentityId);
-        if (identity) return identity;
+        if (identity && !identity.disabled) return identity;
     }
 
+    // A disabled identity is skipped rather than used; if every candidate is disabled the caller is told.
+    let sawDisabled = false;
     for (const ei of entryIdentities) {
         if (accessibleIds && !accessibleIds.has(ei.identityId)) continue;
         const identity = await Identity.findByPk(ei.identityId);
-        if (identity) return identity;
+        if (!identity) continue;
+        if (identity.disabled) { sawDisabled = true; continue; }
+        return identity;
     }
 
-    return { identity: null, requiresIdentity };
+    return { identity: null, requiresIdentity, ...(sawDisabled ? { disabled: true } : {}) };
 };
 
 module.exports = { resolveIdentity };

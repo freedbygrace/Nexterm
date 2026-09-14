@@ -1,7 +1,7 @@
 const { Router } = require("express");
 const { validateSchema } = require("../utils/schema");
-const { listIdentities, createIdentity, deleteIdentity, updateIdentity, moveIdentityToOrganization } = require("../controllers/identity");
-const { createIdentityValidation, updateIdentityValidation, moveIdentityValidation } = require("../validations/identity");
+const { listIdentities, createIdentity, deleteIdentity, updateIdentity, moveIdentityToOrganization, setIdentityDisabled } = require("../controllers/identity");
+const { createIdentityValidation, updateIdentityValidation, moveIdentityValidation, setIdentityDisabledValidation } = require("../validations/identity");
 const { createAuditLog, AUDIT_ACTIONS, RESOURCE_TYPES } = require("../controllers/audit");
 
 const app = Router();
@@ -120,6 +120,45 @@ app.patch("/:identityId", async (req, res) => {
     });
 
     res.json({ message: "Identity got successfully edited" });
+});
+
+/**
+ * POST /identity/{identityId}/disabled
+ * @summary Disable or Enable an Identity
+ * @description Disables an identity without deleting it. Nexterm holds the private key, so a disabled identity can no
+ * longer open a session, act as a jump host or run a command; its credentials, attachments and history stay intact and
+ * it can be enabled again.
+ * @tags Identity
+ * @produces application/json
+ * @security BearerAuth
+ * @param {string} identityId.path.required - The unique identifier of the identity
+ * @param {SetIdentityDisabled} request.body.required - Whether the identity should be disabled
+ * @return {object} 200 - New state of the identity
+ * @return {object} 403 - Not authorized to manage this identity
+ * @return {object} 404 - Identity not found
+ */
+app.post("/:identityId/disabled", async (req, res) => {
+    if (validateSchema(res, setIdentityDisabledValidation, req.body)) return;
+
+    const result = await setIdentityDisabled(req.user.id, req.params.identityId, req.body.disabled);
+    if (result?.code) return res.json(result);
+
+    await createAuditLog({
+        accountId: req.user.id,
+        organizationId: result.identity?.organizationId || null,
+        action: AUDIT_ACTIONS.IDENTITY_UPDATE,
+        resource: RESOURCE_TYPES.IDENTITY,
+        resourceId: req.params.identityId,
+        details: {
+            identityName: result.identity?.name,
+            identityType: result.identity?.type,
+            disabled: req.body.disabled,
+        },
+        ipAddress: req.ip,
+        userAgent: req.headers?.["user-agent"],
+    });
+
+    res.json({ message: req.body.disabled ? "Identity got successfully disabled" : "Identity got successfully enabled", identity: result.identity });
 });
 
 /**

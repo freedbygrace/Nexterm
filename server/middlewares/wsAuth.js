@@ -159,6 +159,11 @@ module.exports = async (ws, req) => {
         return null;
     }
 
+    if (result.disabled) {
+        ws.close(4006, "This identity is disabled");
+        return null;
+    }
+
     if (result.requiresIdentity && !identity) {
         ws.close(4006, "Identity not found");
         return null;

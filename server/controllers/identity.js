@@ -68,7 +68,7 @@ module.exports.listIdentities = async (accountId) => {
     const orgIds = memberships.map(m => m.organizationId);
     const org = orgIds.length ? await Identity.findAll({ where: { organizationId: { [Op.in]: orgIds } } }) : [];
     
-    const format = (i, scope) => ({ id: i.id, name: i.name, type: i.type, username: i.username, organizationId: i.organizationId, accountId: i.accountId, scope });
+    const format = (i, scope) => ({ id: i.id, name: i.name, type: i.type, username: i.username, organizationId: i.organizationId, accountId: i.accountId, disabled: !!i.disabled, scope });
     return [...personal.map(i => format(i, 'personal')), ...org.map(i => format(i, 'organization'))];
 };
 
@@ -135,15 +135,33 @@ module.exports.updateIdentity = async (accountId, identityId, config) => {
     if (!check.valid) return check.error;
 
     const { password, sshKey, passphrase, sshCertificate, accountId: _, organizationId: __, ...updateConfig } = config;
+    if (updateConfig.disabled !== undefined) updateConfig.disabled = !!updateConfig.disabled;
     await Identity.update(updateConfig, { where: { id: identityId, ...(identity.organizationId ? { organizationId: identity.organizationId } : { accountId }) } });
 
     const effectiveType = config.type || identity.type;
     await syncCredentials(identityId, effectiveType, password, sshKey, passphrase, sshCertificate);
-    logger.info("Identity updated", { identityId, name: identity.name });
+    logger.info("Identity updated", { identityId, name: identity.name, ...(updateConfig.disabled !== undefined ? { disabled: updateConfig.disabled } : {}) });
 
     stateBroadcaster.broadcast("IDENTITIES", { accountId, organizationId: identity.organizationId });
 
-    return { success: true, identity: { id: identity.id, name: identity.name, type: identity.type, organizationId: identity.organizationId, accountId: identity.accountId } };
+    return { success: true, identity: { id: identity.id, name: identity.name, type: identity.type, organizationId: identity.organizationId, accountId: identity.accountId, disabled: updateConfig.disabled !== undefined ? updateConfig.disabled : !!identity.disabled } };
+};
+
+/**
+ * Disabling is the kill switch for a stored key: the identity and its history stay, but
+ * utils/identityResolver refuses it, so no new session can be opened with it.
+ */
+module.exports.setIdentityDisabled = async (accountId, identityId, disabled) => {
+    const identity = await Identity.findByPk(identityId);
+    const check = await validateManageAccess(accountId, identity);
+    if (!check.valid) return check.error;
+
+    await Identity.update({ disabled }, { where: { id: identityId } });
+    logger.info(disabled ? "Identity disabled" : "Identity enabled", { identityId, name: identity.name });
+
+    stateBroadcaster.broadcast("IDENTITIES", { accountId, organizationId: identity.organizationId });
+
+    return { success: true, identity: { id: identity.id, name: identity.name, type: identity.type, organizationId: identity.organizationId, accountId: identity.accountId, disabled } };
 };
 
 module.exports.moveIdentityToOrganization = async (accountId, identityId, organizationId) => {

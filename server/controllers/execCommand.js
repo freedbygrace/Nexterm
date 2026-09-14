@@ -28,6 +28,10 @@ const execCommand = async (accountId, entryId, identityId, command) => {
     const result = await resolveIdentity(entry, identityId, null, accountId, "ssh");
     const identity = result?.identity !== undefined ? result.identity : result;
 
+    if (result.disabled) {
+        return { code: 403, message: "This identity is disabled" };
+    }
+
     if (result.accessDenied) {
         return { code: 403, message: "You don't have access to this identity" };
     }

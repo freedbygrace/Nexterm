@@ -133,6 +133,7 @@ const resolveJumpHosts = async (entry) => {
         const { host, port } = getHostPort(jhEntry);
         const identityResult = await resolveIdentity(jhEntry, null, null, null, "ssh");
         const identity = extractIdentity(identityResult);
+        if (identityResult?.disabled) throw new Error(`The identity of jump host ${jumpHostId} is disabled`);
         if (!identity) throw new Error(`No identity found for jump host ${jumpHostId}`);
 
         const credentials = await resolveCredentials(identity);

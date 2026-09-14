@@ -18,15 +18,16 @@
  * which mirrors the behaviour Nexterm always had).
  */
 
-const PROTOCOLS = ["ssh", "telnet", "rdp", "vnc", "sftp", "ftp", "ftps", "demo"];
+const PROTOCOLS = ["ssh", "telnet", "rdp", "vnc", "spice", "sftp", "ftp", "ftps", "demo"];
 
-const DEFAULT_PORTS = { ssh: 22, telnet: 23, rdp: 3389, vnc: 5900, sftp: 22, ftp: 21, ftps: 21, demo: 0 };
+const DEFAULT_PORTS = { ssh: 22, telnet: 23, rdp: 3389, vnc: 5900, spice: 5900, sftp: 22, ftp: 21, ftps: 21, demo: 0 };
 
 const PROTOCOL_RENDERERS = {
     ssh: "terminal",
     telnet: "terminal",
     rdp: "guac",
     vnc: "guac",
+    spice: "guac",
     demo: "guac",
     sftp: "sftp",
     ftp: "sftp",
@@ -37,7 +38,7 @@ const PROTOCOL_RENDERERS = {
 const SSH_DERIVED_TYPES = { web: "web" };
 
 const TERMINAL_PROTOCOLS = new Set(["ssh", "telnet"]);
-const GUAC_PROTOCOLS = new Set(["rdp", "vnc", "demo"]);
+const GUAC_PROTOCOLS = new Set(["rdp", "vnc", "spice", "demo"]);
 const FILE_PROTOCOLS = new Set(["sftp", "ftp", "ftps"]);
 const CREDENTIALLESS_PROTOCOLS = new Set(["telnet", "demo"]);
 

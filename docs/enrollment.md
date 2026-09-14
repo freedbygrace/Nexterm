@@ -70,25 +70,38 @@ entrypoint. It only needs `sh`, and `curl` or `wget`.
 The token in the URL is the only credential the target ever sees, so treat it like a password:
 
 - It is 32 random bytes, and the enrollment endpoints are rate limited.
-- It expires, counts its uses, and can be revoked at any time.
+- It expires, counts its uses, and can be revoked at any time (see [Revoking access](#revoking-access)).
 - It grants exactly two things: fetching the public key, and reporting a host. It cannot read anything
   from Nexterm.
 - The private key is stored encrypted as an ordinary identity and is never served, not even to the host
   being enrolled.
 
-**Revoking a token does not remove keys that were already installed.** It only stops the command from
-working. To withdraw access from an enrolled host, delete the identity (which breaks every connection using
-it) or remove the key from that host's `authorized_keys`.
-
 Because the command is piped into a shell, anyone who can intercept it can run code as the target user.
 Serve Nexterm over HTTPS, as you should anyway.
+
+## Revoking access
+
+The private key never leaves Nexterm, so Nexterm is where access is withdrawn. Revoking a token stops the
+command from working *and* disables the identity it created: the public key stays in the host's
+`authorized_keys`, but Nexterm refuses to use the private key, so every session, file transfer, jump host
+and one-off command through that identity is rejected until it is enabled again.
+
+- Enable or disable the key again on the enrollment page, or any identity on **SSH Keys & Credentials**.
+- `DELETE /api/enrollment/:id?keepIdentity=true` revokes only the token, for the case where the command
+  leaked but the hosts enrolled with it are fine.
+- Deleting the identity is permanent and also removes it from every connection that used it.
+
+Disabling is Nexterm's side of the door. To take the key off the host itself, remove the line from its
+`authorized_keys` - the fingerprint shown on the token identifies it.
 
 ## API
 
 ```
 POST   /api/enrollment       create a token (returns the secret and the command once)
 GET    /api/enrollment       list tokens, without their secrets
-DELETE /api/enrollment/:id   revoke a token
+DELETE /api/enrollment/:id   revoke a token and disable the key it installed
+                             (?keepIdentity=true revokes the token only)
+POST   /api/identities/:id/disabled  disable or enable an identity: {"disabled": true}
 GET    /api/enroll/:token    the shell script, no login required
 POST   /api/enroll/:token/callback   report a host, no login required
 ```

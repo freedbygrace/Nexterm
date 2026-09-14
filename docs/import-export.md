@@ -50,7 +50,8 @@ it reads and diffs well and is easy to edit.
             [
                 "prod"
             ],
-            "notes": "build agent",
+            "description": "build agent",
+            "notes": "# Runbook\n\nRestart with `systemctl restart buildd`.",
             "icon": "server",
             "monitoring": true,
             "config":
@@ -74,6 +75,8 @@ it reads and diffs well and is easy to edit.
 | `primary` | protocol used by the default Connect action |
 | `identities` | identities linked to the entry, **by name** |
 | `tags` | tag names; missing tags are created on import |
+| `description` | one-line blurb; shown under the entry name in the list |
+| `notes` | free-form Markdown, kept in the entry's notes panel |
 | `config` | everything else: RDP security, keyboard layout, jump hosts (by entry name), Wake-on-LAN, telnet prompts, display options |
 
 **Secrets are never exported.** Identities are referenced by name only; passwords, keys and certificates stay

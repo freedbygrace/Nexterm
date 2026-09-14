@@ -26,13 +26,18 @@ entry (`"rdp": { "enabled": true, "port": 3389, "identityId": 12 }`); the list e
 
 ## Connecting
 
-Right-click an entry:
+Hover an entry for half a second and a button appears for each enabled protocol - one click connects. Or right-click
+it:
 
-- **Connect** opens the primary protocol.
-- **Connect via RDP / VNC / SPICE / Telnet / FTP ...** appears for every other enabled protocol.
-- **Open SFTP**, **Open Browser**, **Forward Port** and **Run Script** are available whenever the entry exposes SFTP
-  or SSH, regardless of which protocol is primary.
+- **Connect** opens the primary protocol; its chevron lists every other enabled protocol (SSH, RDP, VNC, SPICE,
+  Telnet, SFTP, FTP ...), and, when the entry links more than one identity, the identity to use for it.
+- **Open Browser**, **Forward Port** and **Run Script** are available whenever the entry exposes SSH, regardless of
+  which protocol is primary.
 - **Quick Connect** lets you pick the protocol together with one-off credentials.
+
+An SSH session does not need a second tab for files: the **Files** panel docks to the right of the terminal (the
+handle on its edge, or right-click → *Show files*), opens in the shell's current directory, and keeps its place when
+retracted.
 
 Every session remembers the protocol it was opened with, so hibernated and reconnected sessions keep their renderer.
 

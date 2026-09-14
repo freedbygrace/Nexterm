@@ -3,7 +3,7 @@ const { checkServerStatusBatch } = require("../hooks/status/portHook");
 const { checkPVEStatus } = require("../hooks/status/pveHook");
 const { getMonitoringSettingsInternal } = require("../controllers/monitoring");
 const controlPlane = require("../lib/controlPlane/ControlPlaneServer");
-const stateBroadcaster = require("../lib/stateBroadcaster");
+const stateBroadcaster = require("../lib/StateBroadcaster");
 const logger = require("./logger");
 
 let statusCheckInterval = null;

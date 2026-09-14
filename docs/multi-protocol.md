@@ -102,3 +102,17 @@ identities; see [Import & Export](/import-export).
 
 Existing entries are migrated automatically: each one gets a map containing its previous protocol (plus SFTP for SSH
 entries), so nothing changes until you enable more.
+
+## Copying the current path
+
+The file manager can copy a remote path to the clipboard: **Copy path** in an item's context menu (one path
+per line for a multi-selection), **Copy current path** in the empty-space menu, and a button next to the
+breadcrumb.
+
+In an SSH session the same action appears in the terminal context menu, but only once the shell has told
+Nexterm where it is. Shells do that with the OSC 7 escape sequence. zsh and fish emit it out of the box on
+most distributions (through `vte.sh` / `__vte_prompt_command`); for bash add this to `~/.bashrc`:
+
+```bash
+PROMPT_COMMAND='printf "\033]7;file://%s%s\007" "$HOSTNAME" "$PWD"'
+```

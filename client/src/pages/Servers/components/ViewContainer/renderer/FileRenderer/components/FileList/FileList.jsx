@@ -9,6 +9,7 @@ import {
 import { ContextMenu, ContextMenuItem, ContextMenuSeparator, useContextMenu } from "@/common/components/ContextMenu";
 import { ActionConfirmDialog } from "@/common/components/ActionConfirmDialog/ActionConfirmDialog.jsx";
 import { useTranslation } from "react-i18next";
+import { copyToClipboard } from "@/common/utils/clipboard.js";
 import { usePreferences } from "@/common/contexts/PreferencesContext.jsx";
 import SelectionActionBar from "../SelectionActionBar";
 import FileItem from "./components/FileItem";
@@ -121,6 +122,14 @@ export const FileList = forwardRef(({
         path, sessionId: session.id, selectedItems, isItemSelected,
         moveFiles, copyFiles, dragDropAction, updatePath, onExternalDrop,
     });
+
+    /** Copies a remote path (or one path per line for a multi-selection) to the clipboard. */
+    const copyPathText = useCallback((text) => { void copyToClipboard(text); }, []);
+
+    const copySelectedPaths = useCallback(() => {
+        const items = selectedItems.length > 1 ? selectedItems : [selectedItem].filter(Boolean);
+        copyPathText(items.map(item => `${path}/${item.name}`).join(String.fromCharCode(10)));
+    }, [selectedItems, selectedItem, path, copyPathText]);
 
     const handleItemClick = useCallback((event, item) => {
         if (event.ctrlKey || event.metaKey) {
@@ -298,6 +307,7 @@ export const FileList = forwardRef(({
                     </>
                 )}
                 <ContextMenuItem icon={mdiFileDownload} label={t("servers.fileManager.contextMenu.download")} onClick={() => downloadFile(`${path}/${selectedItem?.name}`)} />
+                <ContextMenuItem icon={mdiContentCopy} label={t("servers.fileManager.contextMenu.copyPath")} onClick={copySelectedPaths} />
                 <ContextMenuItem icon={mdiInformationOutline} label={t("servers.fileManager.contextMenu.properties")} onClick={() => handlePropertiesClick(selectedItem)} />
                 {selectedItem?.type === "folder" && capabilities.terminal && (
                     <ContextMenuItem icon={mdiConsole} label={t("servers.fileManager.contextMenu.openTerminal")} onClick={() => handleOpenTerminal(`${path}/${selectedItem.name}`)} />
@@ -308,6 +318,7 @@ export const FileList = forwardRef(({
             <ContextMenu isOpen={emptyContextMenu.isOpen} position={emptyContextMenu.position} onClose={emptyContextMenu.close} trigger={emptyContextMenu.triggerRef}>
                 <ContextMenuItem icon={mdiFilePlus} label={t("servers.fileManager.contextMenu.newFile")} onClick={startCreateFile} />
                 <ContextMenuItem icon={mdiFolderPlus} label={t("servers.fileManager.contextMenu.newFolder")} onClick={startCreateFolder} />
+                <ContextMenuItem icon={mdiContentCopy} label={t("servers.fileManager.contextMenu.copyCurrentPath")} onClick={() => copyPathText(path)} />
                 <ContextMenuSeparator />
                 <ContextMenuItem icon={mdiFileDownload} label={t("servers.fileManager.contextMenu.downloadFolder")} onClick={() => downloadFile(path)} />
                 <ContextMenuItem icon={mdiInformationOutline} label={t("servers.fileManager.contextMenu.properties")} onClick={() => handlePropertiesClick(null)} />

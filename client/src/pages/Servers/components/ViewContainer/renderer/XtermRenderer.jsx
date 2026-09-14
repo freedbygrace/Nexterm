@@ -35,6 +35,9 @@ const clampFontSize = (size) => Math.min(MAX_ZOOM_FONT_SIZE, Math.max(MIN_ZOOM_F
 const XtermRenderer = ({ session, disconnectFromServer, reconnectSession, reconnectNow, markSessionConnected, reconnectInfo, markSessionErrored, getSessionError, registerTerminalRef, broadcastMode, terminalRefs, broadcastSessionIds, updateProgress, layoutMode, onBroadcastToggle, onFullscreenToggle, isShared = false, onOpenSftp }) => {
     const ref = useRef(null);
     const termRef = useRef(null);
+    // Working directory reported by the shell through OSC 7 (file://host/path), when it emits it.
+    const [shellPath, setShellPath] = useState(null);
+    const shellPathRef = useRef(null);
     const wsRef = useRef(null);
     const broadcastModeRef = useRef(broadcastMode);
     const broadcastSessionIdsRef = useRef(broadcastSessionIds);
@@ -320,6 +323,12 @@ const XtermRenderer = ({ session, disconnectFromServer, reconnectSession, reconn
         });
     };
 
+    const handleCopyPath = () => {
+        if (shellPathRef.current) copyToClipboard(shellPathRef.current);
+        contextMenu.close();
+        termRef.current?.focus();
+    };
+
     const handleCopy = () => {
         const selection = termRef.current?.getSelection();
         if (selection) copyToClipboard(selection);
@@ -415,6 +424,20 @@ const XtermRenderer = ({ session, disconnectFromServer, reconnectSession, reconn
         });
 
         termRef.current = term;
+
+        // OSC 7 is how shells advertise their working directory (vte, zsh and fish do it out of the box).
+        term.parser.registerOscHandler(7, (data) => {
+            try {
+                const url = new URL(data);
+                if (url.protocol !== "file:") return false;
+                const decoded = decodeURIComponent(url.pathname);
+                shellPathRef.current = decoded;
+                setShellPath(decoded);
+            } catch {
+                return false;
+            }
+            return true;
+        });
 
         const fitAddon = new FitAddon();
         term.loadAddon(fitAddon);
@@ -907,13 +930,20 @@ const XtermRenderer = ({ session, disconnectFromServer, reconnectSession, reconn
                         label={t('servers.fileManager.contextMenu.clearTerminal')}
                         onClick={handleClearTerminal}
                     />
+                    {shellPath && (
+                        <ContextMenuItem
+                            icon={mdiContentCopy}
+                            label={t('servers.fileManager.contextMenu.copyCurrentPath')}
+                            onClick={handleCopyPath}
+                        />
+                    )}
                     {onOpenSftp && (
                         <>
                             <ContextMenuSeparator />
                             <ContextMenuItem
                                 icon={mdiFolderOpen}
                                 label={t('servers.tabs.contextMenu.openSftp')}
-                                onClick={() => { contextMenu.close(); onOpenSftp(); }}
+                                onClick={() => { contextMenu.close(); onOpenSftp(shellPathRef.current || undefined); }}
                             />
                         </>
                     )}

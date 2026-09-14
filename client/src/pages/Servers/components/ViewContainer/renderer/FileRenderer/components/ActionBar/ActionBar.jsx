@@ -19,6 +19,7 @@ import {
 import { Fragment, useState, useRef, useEffect, useCallback } from "react";
 import { ContextMenu, ContextMenuItem, useContextMenu } from "@/common/components/ContextMenu";
 import { useTranslation } from "react-i18next";
+import { copyToClipboard } from "@/common/utils/clipboard.js";
 import { usePreferences } from "@/common/contexts/PreferencesContext.jsx";
 
 export const ActionBar = ({
@@ -229,6 +230,8 @@ export const ActionBar = ({
         }, 100);
     };
 
+    const copyPathText = useCallback((text) => { void copyToClipboard(text); }, []);
+
     const handlePathDragOver = useCallback((event, targetPath) => {
         const internal = event.dataTransfer.types.includes("application/x-sftp-files");
         if (!internal && !event.dataTransfer.types.includes("Files")) return;
@@ -399,6 +402,7 @@ export const ActionBar = ({
                 <Icon path={mdiRefresh} onClick={refreshFiles} title={t("servers.fileManager.actionBar.refresh")} />
                 <Icon path={mdiFileUpload} onClick={uploadFile} title={t("servers.fileManager.actionBar.uploadFile")} />
                 <Icon path={mdiFolderUpload} onClick={uploadFolder} title={t("servers.fileManager.actionBar.uploadFolder")} />
+                <Icon path={mdiContentCopy} onClick={() => copyPathText(path)} title={t("servers.fileManager.contextMenu.copyCurrentPath")} />
                 <Icon path={mdiFilePlus} onClick={createFile} />
                 <Icon path={mdiFolderPlus} onClick={createFolder} />
             </div>

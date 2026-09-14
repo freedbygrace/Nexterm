@@ -253,13 +253,21 @@ class EngineSftpClient extends EventEmitter {
         return { stream, totalSizePromise, done };
     }
 
-    async writeFile(path, source) {
+    /**
+     * Writes `source` (a Buffer or a readable stream) to `path`.
+     *
+     * @param {object} [options]
+     * @param {boolean} [options.append] append instead of truncating, so a chunked upload can continue
+     *        where an interrupted one stopped.
+     */
+    async writeFile(path, source, { append = false } = {}) {
         const rid = this._nextId();
 
         this._buildAndSend(rid, SftpMsgType.WriteBegin, (b) => {
             const pathOff = b.createString(path);
             WriteBeginReq.startWriteBeginReq(b);
             WriteBeginReq.addPath(b, pathOff);
+            if (append) WriteBeginReq.addAppend(b, true);
             return { writeBeginReq: WriteBeginReq.endWriteBeginReq(b) };
         });
 

@@ -669,8 +669,12 @@ static void dispatch_write_op(Nexterm_SftpProtocol_SftpMsgType_enum_t mt,
     const char* path = req ? Nexterm_SftpProtocol_WriteBeginReq_path(req) : NULL;
     if (!path) { fp_send_error(data_fd, rid, "Missing path", -1); return; }
 
-    ws->handle = libssh2_sftp_open(sftp, path,
-        LIBSSH2_FXF_WRITE | LIBSSH2_FXF_CREAT | LIBSSH2_FXF_TRUNC,
+    /* Appending lets a chunked upload continue where an interrupted one stopped. */
+    bool append = req ? Nexterm_SftpProtocol_WriteBeginReq_append(req) : false;
+    unsigned long open_flags = LIBSSH2_FXF_WRITE | LIBSSH2_FXF_CREAT |
+        (append ? LIBSSH2_FXF_APPEND : LIBSSH2_FXF_TRUNC);
+
+    ws->handle = libssh2_sftp_open(sftp, path, open_flags,
         LIBSSH2_SFTP_S_IRUSR | LIBSSH2_SFTP_S_IWUSR |
         LIBSSH2_SFTP_S_IRGRP | LIBSSH2_SFTP_S_IROTH);
     if (!ws->handle) {

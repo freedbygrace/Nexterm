@@ -61,6 +61,8 @@ table ChmodReq {
 
 table WriteBeginReq {
     path: string;
+    // Open for append instead of truncating, so an interrupted upload can be resumed.
+    append: bool = false;
 }
 
 table WriteDataReq {

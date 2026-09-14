@@ -90,6 +90,9 @@ app.use("/api/integrations", authenticate, require("./routes/integration"));
 app.use("/api/audit/recordings", require("./routes/auditRecordings"));
 app.use("/api/audit", authenticate, require("./routes/audit"));
 app.use("/api/identities", authenticate, require("./routes/identity"));
+app.use("/api/enrollment", require("./routes/enrollment"));
+// Unauthenticated: the token in the URL is the credential (see routes/enrollment.js).
+app.use("/api/enroll", require("./routes/enrollment").publicApp);
 app.use("/api/snippets", authenticate, require("./routes/snippet"));
 app.use("/api/organizations", authenticate, require("./routes/organization"));
 app.use("/api/tags", authenticate, require("./routes/tag"));

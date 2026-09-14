@@ -1,9 +1,9 @@
 import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import Icon from "@mdi/react";
-import { mdiCheckCircleOutline, mdiNoteEditOutline, mdiSync } from "@mdi/js";
+import { mdiCheckCircleOutline, mdiEyeOutline, mdiNoteEditOutline, mdiPencilOutline, mdiSync } from "@mdi/js";
 import { getRequest, patchRequest } from "@/common/utils/RequestUtil.js";
-import ToggleSwitch from "@/common/components/ToggleSwitch";
+import Markdown from "@/common/components/Markdown";
 import Tooltip from "@/common/components/Tooltip";
 import { ServerContext } from "@/common/contexts/ServerContext.jsx";
 import "./styles.sass";
@@ -21,10 +21,10 @@ export const NotesRenderer = ({ session }) => {
     const serverFromContext = getServerById?.(entryId);
 
     const initialNotes = serverFromContext?.notes ?? server?.notes ?? "";
-    const initialShowInList = Boolean(serverFromContext?.showNoteInList ?? server?.showNoteInList);
 
     const [value, setValue] = useState(initialNotes);
-    const [showInList, setShowInList] = useState(initialShowInList);
+    // Notes are Markdown; the pane flips between writing and reading it.
+    const [preview, setPreview] = useState(false);
     const [status, setStatus] = useState(STATUS.IDLE);
 
     const textareaRef = useRef(null);
@@ -32,7 +32,7 @@ export const NotesRenderer = ({ session }) => {
     const saveTimerRef = useRef(null);
     const inFlightRef = useRef(false);
     const pendingPatchRef = useRef(null);
-    const lastSavedRef = useRef({ notes: initialNotes, showNoteInList: initialShowInList });
+    const lastSavedRef = useRef({ notes: initialNotes });
     const valueRef = useRef(initialNotes);
 
     useEffect(() => {
@@ -43,15 +43,10 @@ export const NotesRenderer = ({ session }) => {
             if (cancelled || !entry) return;
             entrySnapshotRef.current = entry;
             const remoteNotes = entry?.config?.notes ?? "";
-            const remoteShowInList = Boolean(entry?.config?.showNoteInList);
             if (remoteNotes !== lastSavedRef.current.notes && valueRef.current === lastSavedRef.current.notes) {
                 valueRef.current = remoteNotes;
                 setValue(remoteNotes);
                 lastSavedRef.current.notes = remoteNotes;
-            }
-            if (remoteShowInList !== lastSavedRef.current.showNoteInList && showInList === lastSavedRef.current.showNoteInList) {
-                setShowInList(remoteShowInList);
-                lastSavedRef.current.showNoteInList = remoteShowInList;
             }
         }).catch(() => {});
 
@@ -95,7 +90,6 @@ export const NotesRenderer = ({ session }) => {
             });
             entrySnapshotRef.current = { ...entry, config: nextConfig };
             if ("notes" in patch) lastSavedRef.current.notes = patch.notes;
-            if ("showNoteInList" in patch) lastSavedRef.current.showNoteInList = patch.showNoteInList;
             setStatus(STATUS.SAVED);
         } catch (err) {
             console.error("Failed to save notes", err);
@@ -107,7 +101,6 @@ export const NotesRenderer = ({ session }) => {
             if (queued) {
                 const drained = {};
                 if ("notes" in queued && queued.notes !== lastSavedRef.current.notes) drained.notes = queued.notes;
-                if ("showNoteInList" in queued && queued.showNoteInList !== lastSavedRef.current.showNoteInList) drained.showNoteInList = queued.showNoteInList;
                 if (Object.keys(drained).length > 0) persist(drained);
             }
         }
@@ -154,9 +147,10 @@ export const NotesRenderer = ({ session }) => {
         }
     };
 
-    const handleShowInListToggle = (checked) => {
-        setShowInList(checked);
-        persist({ showNoteInList: checked });
+    // Leaving the editor is a good moment to write, so the preview always shows what is saved.
+    const togglePreview = () => {
+        if (!preview) flushNotesSave();
+        setPreview(!preview);
     };
 
     const renderStatus = () => {
@@ -192,8 +186,6 @@ export const NotesRenderer = ({ session }) => {
         }
     };
 
-    const toggleId = `notes-show-in-list-${entryId}`;
-
     return (
         <div className="notes-renderer">
             <div className="notes-header">
@@ -202,26 +194,32 @@ export const NotesRenderer = ({ session }) => {
                     <h3>{t("servers.notesPanel.title")}</h3>
                 </div>
                 <div className="notes-actions">
-                    <Tooltip text={t("servers.notesPanel.showInListTooltip")} delay={600}>
-                        <label htmlFor={toggleId} className="notes-toggle">
-                            <span className="notes-toggle-label">{t("servers.notesPanel.showInList")}</span>
-                            <ToggleSwitch id={toggleId} checked={showInList} onChange={handleShowInListToggle} />
-                        </label>
+                    <Tooltip text={t(preview ? "servers.notesPanel.editTooltip" : "servers.notesPanel.previewTooltip")} delay={600}>
+                        <button type="button" className={`notes-preview-btn${preview ? " active" : ""}`} onClick={togglePreview}>
+                            <Icon path={preview ? mdiPencilOutline : mdiEyeOutline} />
+                            <span>{t(preview ? "servers.notesPanel.edit" : "servers.notesPanel.preview")}</span>
+                        </button>
                     </Tooltip>
                     {renderStatus()}
                 </div>
             </div>
-            <textarea
-                ref={textareaRef}
-                className="notes-textarea"
-                value={value}
-                onChange={handleChange}
-                onBlur={flushNotesSave}
-                onKeyDown={handleKeyDown}
-                placeholder={t("servers.notesPanel.placeholder")}
-                spellCheck={false}
-                autoFocus
-            />
+            {preview ? (
+                value.trim()
+                    ? <Markdown text={value} className="notes-preview" />
+                    : <p className="notes-preview-empty">{t("servers.notesPanel.previewEmpty")}</p>
+            ) : (
+                <textarea
+                    ref={textareaRef}
+                    className="notes-textarea"
+                    value={value}
+                    onChange={handleChange}
+                    onBlur={flushNotesSave}
+                    onKeyDown={handleKeyDown}
+                    placeholder={t("servers.notesPanel.placeholder")}
+                    spellCheck={false}
+                    autoFocus
+                />
+            )}
         </div>
     );
 };

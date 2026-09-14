@@ -1,0 +1,90 @@
+@use "@/common/styles/colors"
+
+// Shared look for rendered Markdown. Callers add their own class alongside `.markdown`
+// (the AI assistant keeps its tighter chat spacing that way).
+.markdown
+  display: flex
+  flex-direction: column
+  gap: 0.5rem
+  color: colors.$white
+  font-size: 0.9rem
+  line-height: 1.5
+  word-break: break-word
+
+  .text-line
+    margin: 0
+    white-space: pre-wrap
+
+    &:empty
+      display: none
+
+  .md-heading
+    margin: 0.4rem 0 0
+    font-weight: 600
+    line-height: 1.3
+
+    &:is(h1, h2)
+      font-size: 1.05rem
+
+    &:is(h3, h4, h5, h6)
+      font-size: 0.95rem
+
+  .inline-code
+    background: colors.$darker-gray
+    border: 1px solid colors.$gray
+    border-radius: 0.3rem
+    padding: 0.05rem 0.3rem
+    font-family: monospace
+    font-size: 0.82rem
+
+  .code-block
+    margin: 0
+    background: colors.$background
+    border: 1px solid colors.$gray
+    border-radius: 0.5rem
+    padding: 0.65rem 0.75rem
+    overflow-x: auto
+    font-family: monospace
+    font-size: 0.82rem
+
+  .md-list
+    margin: 0
+    padding-left: 1.25rem
+
+    li
+      margin: 0.15rem 0
+
+  .md-quote
+    margin: 0
+    padding: 0.2rem 0 0.2rem 0.75rem
+    border-left: 3px solid colors.$gray
+    color: colors.$subtext
+
+  .md-hr
+    width: 100%
+    border: none
+    border-top: 1px solid colors.$gray
+    margin: 0.25rem 0
+
+  .md-table-wrap
+    overflow-x: auto
+
+  .md-table
+    border-collapse: collapse
+    font-size: 0.85rem
+
+    th,
+    td
+      border: 1px solid colors.$gray
+      padding: 0.3rem 0.5rem
+      text-align: left
+
+    th
+      background-color: colors.$darker-gray
+
+  a
+    color: colors.$primary
+    text-decoration: none
+
+    &:hover
+      text-decoration: underline

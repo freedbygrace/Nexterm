@@ -26,3 +26,7 @@ module.exports.updateOrganizationAuditSettingsValidation = Joi.object({
     enableSessionRecording: Joi.boolean().optional(),
     recordingRetentionDays: Joi.number().integer().min(1).max(3650).optional(),
 }).min(1);
+
+module.exports.createRecordingShareValidation = Joi.object({
+    expiresIn: Joi.number().integer().min(60).max(7 * 24 * 60 * 60).default(24 * 60 * 60),
+});

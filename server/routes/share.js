@@ -4,8 +4,35 @@ const Entry = require("../models/Entry");
 const Organization = require("../models/Organization");
 const Account = require("../models/Account");
 const { getPrimaryProtocol } = require("../utils/entryProtocols");
+const auditController = require("../controllers/audit");
+const { sendRecording } = require("../utils/recordingService");
+const logger = require("../utils/logger");
 
 const app = Router();
+
+/**
+ * GET /share/recording/{token}
+ * @summary Get Shared Session Recording
+ * @description Streams a single session recording through a signed share link created with POST /audit/recordings/{auditLogId}/share. No login is required and nothing but the recording file itself is exposed. By default the raw gzip file is sent as a download; pass ?inline=true to receive the decoded stream (Content-Encoding: gzip) for in-browser playback, with the format in the X-Recording-Type header ("cast" or "guac"). Links are stateless and cannot be revoked individually: they stop working when they expire or when the recording is deleted.
+ * @tags Share
+ * @produces application/gzip, application/json, application/octet-stream
+ * @param {string} token.path.required - Signed share token
+ * @param {string} inline.query - Set to "true" to stream the decoded recording for playback instead of a file download
+ * @return {file} 200 - Recording file
+ * @return {object} 404 - Unknown or tampered token, or recording no longer available
+ * @return {object} 410 - Share link expired
+ */
+app.get("/recording/:token", async (req, res) => {
+    try {
+        const result = await auditController.getSharedRecording(req.params.token);
+        if (result.code) return res.status(result.code).json({ message: result.message });
+
+        sendRecording(res, result, { download: req.query.inline !== "true" });
+    } catch (error) {
+        logger.error("Error in shared recording route", { error: error.message });
+        if (!res.headersSent) res.status(500).json({ message: "An error occurred while retrieving the recording" });
+    }
+});
 
 /**
  * GET /share/{shareId}

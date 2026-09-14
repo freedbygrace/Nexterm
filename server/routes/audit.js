@@ -1,11 +1,11 @@
 const { Router } = require("express");
-const fs = require("fs");
 const logger = require("../utils/logger");
 const auditController = require("../controllers/audit");
 const { getAuditLogsValidation, updateOrganizationAuditSettingsValidation } = require("../validations/audit");
 const { validateSchema } = require("../utils/schema");
 const { requirePermission } = require("../middlewares/permission");
 const { Permission } = require("../permissions/registry");
+const { sendRecording } = require("../utils/recordingService");
 
 const app = Router();
 
@@ -114,13 +114,13 @@ app.patch("/organizations/:id/settings", async (req, res) => {
 
 /**
  * GET /audit/{auditLogId}/recording
- * @summary Download Session Recording
- * @description Downloads a session recording file for the specified audit log entry. Recordings are returned as gzip-compressed files in either Guacamole (.guac) or Asciicast (.cast) format depending on the session type.
+ * @summary Stream Session Recording for Playback
+ * @description Streams a session recording for the in-app player. The body is sent with Content-Encoding: gzip so browsers decode it transparently into Guacamole (.guac) or Asciicast (.cast) data; the format is also exposed in the X-Recording-Type header. Use GET /audit/recordings/{auditLogId}/download to obtain the raw .gz file.
  * @tags Audit
  * @produces application/octet-stream, application/json
  * @security BearerAuth
  * @param {number} auditLogId.path.required - The unique identifier of the audit log entry containing the recording
- * @return {file} 200 - Gzip-compressed session recording file
+ * @return {file} 200 - Session recording stream
  * @return {object} 403 - Access denied to the recording
  * @return {object} 404 - Recording not found
  * @return {object} 500 - Internal server error
@@ -130,20 +130,11 @@ app.get("/:auditLogId/recording", async (req, res) => {
         const auditLogId = parseInt(req.params.auditLogId);
         const result = await auditController.getRecording(req.user.id, auditLogId);
         if (result.code) return res.status(result.code).json({ message: result.message });
-        
-        res.setHeader("Content-Type", result.type === "cast" ? "application/json" : "application/octet-stream");
-        res.setHeader("Content-Encoding", "gzip");
-        res.setHeader("Content-Disposition", `attachment; filename="${auditLogId}.${result.type}.gz"`);
-        
-        const fileStream = fs.createReadStream(result.path);
-        fileStream.pipe(res);
-        fileStream.on("error", (error) => {
-            logger.error("Error streaming recording file", { auditLogId, error: error.message });
-            if (!res.headersSent) res.status(500).json({ message: "Failed to stream recording" });
-        });
+
+        sendRecording(res, result);
     } catch (error) {
         logger.error("Error in recording route", { auditLogId: req.params.auditLogId, error: error.message });
-        res.status(500).json({ message: "An error occurred while retrieving the recording" });
+        if (!res.headersSent) res.status(500).json({ message: "An error occurred while retrieving the recording" });
     }
 });
 

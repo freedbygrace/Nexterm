@@ -85,10 +85,14 @@ module.exports.bulkImportEntryValidation = Joi.object({
     notes: Joi.string().allow("").max(10000).optional(),
     icon: Joi.string().max(100).optional(),
     monitoring: Joi.boolean().optional(),
-    config: configValidation.optional(),
+    // Jump hosts may be given as entry names in an import; they are resolved to ids per row.
+    config: configValidation.keys({ jumpHosts: Joi.array().items(Joi.alternatives().try(Joi.number(), Joi.string().max(200))).optional() }).optional(),
 });
 
 module.exports.bulkImportValidation = Joi.object({
+    // The body of an export document is accepted as-is, so version/exportedAt are tolerated.
+    version: Joi.number().optional(),
+    exportedAt: Joi.string().optional(),
     entries: Joi.array().items(Joi.object().unknown(true)).min(1).max(500).required(),
     folderId: Joi.number().allow(null).optional(),
     organizationId: Joi.number().allow(null).optional(),

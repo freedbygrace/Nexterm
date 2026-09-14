@@ -752,6 +752,25 @@ module.exports.bulkImportEntries = async (accountId, { entries, folderId = null,
         if (target?.code) return { status: "error", message: target.message };
 
         const { protocol: _protocol, protocols: _protocols, ...extraConfig } = row.config || {};
+
+        // Jump hosts may reference other entries by name (that is how the export writes them).
+        const unknownJumpHosts = [];
+        if (Array.isArray(extraConfig.jumpHosts)) {
+            const resolved = [];
+            for (const reference of extraConfig.jumpHosts) {
+                if (typeof reference === "number") { resolved.push(reference); continue; }
+                const jumpHost = await Entry.findOne({
+                    where: {
+                        type: "server",
+                        ...(organizationId ? { organizationId } : { organizationId: null, accountId }),
+                        [Op.and]: [sqlWhere(fn("lower", col("name")), String(reference).trim().toLowerCase())],
+                    },
+                });
+                if (jumpHost) resolved.push(jumpHost.id);
+                else unknownJumpHosts.push(reference);
+            }
+            extraConfig.jumpHosts = resolved;
+        }
         const config = normalizeServerConfig({
             ...extraConfig,
             ip: row.host,
@@ -803,7 +822,11 @@ module.exports.bulkImportEntries = async (accountId, { entries, folderId = null,
         if (entry?.code) return { status: "error", message: entry.message };
 
         for (const tagId of tagIds) await EntryTag.create({ entryId: entry.id, tagId });
-        return { status: "created", id: entry.id };
+        return {
+            status: "created",
+            id: entry.id,
+            ...(unknownJumpHosts.length ? { message: `Unknown jump host skipped: ${unknownJumpHosts.join(", ")}` } : {}),
+        };
     };
 
     const results = [];
@@ -1048,4 +1071,140 @@ module.exports.getRecentConnections = async (accountId, limit = 5) => {
         logger.error("Error getting recent connections", { error: error.message, accountId });
         return [];
     }
+};
+
+/** Config keys the export lifts to top-level fields; everything else is preserved under `config`. */
+const EXPORT_LIFTED_CONFIG_KEYS = new Set(["ip", "port", "protocol", "protocols", "notes", "monitoringEnabled"]);
+
+/** Key order of an exported entry, so hand-edited files and fresh exports stay comparable. */
+const EXPORT_KEY_ORDER = ["name", "host", "folderPath", "protocols", "primary", "identities", "tags", "notes", "icon", "monitoring", "config"];
+
+const orderExportKeys = (row) => Object.fromEntries(
+    EXPORT_KEY_ORDER.filter(key => row[key] !== undefined).map(key => [key, row[key]]),
+);
+
+/**
+ * Exports server entries as the document `POST /entries/import/bulk` consumes.
+ *
+ * Identities, tags and jump hosts are exported by NAME (never secrets), folders as a `folderPath`
+ * relative to the export scope, and every remaining config key is preserved verbatim under `config`
+ * so an export/import round trip keeps an entry identical. Integration-managed entries (Proxmox) are
+ * skipped: they are synced from their source, not imported.
+ */
+module.exports.exportEntries = async (accountId, { folderId = null, organizationId = null } = {}) => {
+    if (folderId) {
+        const folderCheck = await validateFolderAccess(accountId, folderId);
+        if (!folderCheck.valid) return folderCheck.error || folderCheck;
+        organizationId = folderCheck.folder?.organizationId || null;
+    } else if (organizationId && !(await hasOrganizationAccess(accountId, organizationId))) {
+        return { code: 403, message: "You don't have access to this organization" };
+    }
+
+    const folders = await Folder.findAll({
+        where: organizationId ? { organizationId } : { organizationId: null, accountId },
+    });
+    const folderById = new Map(folders.map(folder => [folder.id, folder]));
+
+    // Folder path relative to the export scope; null when the entry sits outside it.
+    const relativePath = (entryFolderId) => {
+        const segments = [];
+        let current = entryFolderId ? folderById.get(entryFolderId) : null;
+        if (entryFolderId && !current) return null;
+        while (current && current.id !== folderId) {
+            segments.unshift(current.name);
+            current = current.parentId ? folderById.get(current.parentId) : null;
+            if (!current && folderId) return null;
+        }
+        if (folderId && !entryFolderId) return null;
+        return segments.join("/");
+    };
+
+    const scopedFolderIds = folders
+        .map(folder => folder.id)
+        .filter(id => relativePath(id) !== null);
+
+    const entries = await Entry.findAll({
+        where: {
+            type: "server",
+            integrationId: null,
+            ...(organizationId ? { organizationId } : { organizationId: null, accountId }),
+            ...(folderId
+                ? { folderId: { [Op.in]: scopedFolderIds.length ? scopedFolderIds : [-1] } }
+                : {}),
+        },
+        order: [["folderId", "ASC"], ["position", "ASC"], ["id", "ASC"]],
+    });
+
+    const accessibleIdentities = await listIdentities(accountId);
+    const identityNameById = new Map(accessibleIdentities.map(identity => [identity.id, identity.name]));
+    const entryIds = entries.map(entry => entry.id);
+    const entryIdentities = entryIds.length
+        ? await EntryIdentity.findAll({ where: { entryId: { [Op.in]: entryIds } }, order: [["isDefault", "DESC"]] })
+        : [];
+    const entryTags = entryIds.length ? await EntryTag.findAll({ where: { entryId: { [Op.in]: entryIds } } }) : [];
+    const allTags = await Tag.findAll({ where: { accountId } });
+    const tagNameById = new Map(allTags.map(tag => [tag.id, tag.name]));
+
+    const identitiesByEntry = new Map();
+    for (const link of entryIdentities) {
+        const name = identityNameById.get(link.identityId);
+        if (!name) continue;
+        if (!identitiesByEntry.has(link.entryId)) identitiesByEntry.set(link.entryId, []);
+        identitiesByEntry.get(link.entryId).push({ id: link.identityId, name });
+    }
+
+    const tagsByEntry = new Map();
+    for (const link of entryTags) {
+        const name = tagNameById.get(link.tagId);
+        if (!name) continue;
+        if (!tagsByEntry.has(link.entryId)) tagsByEntry.set(link.entryId, []);
+        tagsByEntry.get(link.entryId).push(name);
+    }
+
+    const entryNameById = new Map(entries.map(entry => [entry.id, entry.name]));
+
+    const exported = [];
+    for (const entry of entries) {
+        const path = relativePath(entry.folderId);
+        if (path === null) continue;
+
+        const config = { ...(entry.config || {}) };
+        const linkedIdentities = identitiesByEntry.get(entry.id) || [];
+        const identityNames = linkedIdentities.map(identity => identity.name);
+
+        const protocols = {};
+        for (const protocol of getEnabledProtocols(entry)) {
+            const settings = { enabled: true, port: getProtocolPort(entry, protocol) };
+            const identityId = getProtocolIdentities(entry)[protocol];
+            const identityName = identityId ? identityNameById.get(identityId) : null;
+            if (identityName) settings.identity = identityName;
+            protocols[protocol] = settings;
+        }
+
+        const extraConfig = Object.fromEntries(
+            Object.entries(config).filter(([key]) => !EXPORT_LIFTED_CONFIG_KEYS.has(key)),
+        );
+        // Jump hosts travel as entry names so they survive an import into a fresh installation.
+        if (Array.isArray(extraConfig.jumpHosts)) {
+            extraConfig.jumpHosts = extraConfig.jumpHosts.map(id => entryNameById.get(id) || id);
+        }
+
+        exported.push(orderExportKeys({
+            name: entry.name,
+            host: config.ip || "",
+            folderPath: path || undefined,
+            protocols,
+            primary: config.protocol || getEnabledProtocols(entry)[0],
+            identities: identityNames.length ? identityNames : undefined,
+            tags: tagsByEntry.get(entry.id),
+            notes: config.notes || undefined,
+            icon: entry.icon || undefined,
+            monitoring: config.monitoringEnabled === undefined ? undefined : Boolean(config.monitoringEnabled),
+            config: Object.keys(extraConfig).length ? extraConfig : undefined,
+        }));
+    }
+
+    logger.info("Entries exported", { accountId, organizationId, folderId, count: exported.length });
+
+    return { version: 1, exportedAt: new Date().toISOString(), entries: exported };
 };

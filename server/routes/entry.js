@@ -1,5 +1,6 @@
 const { Router } = require("express");
-const { createEntry, deleteEntry, editEntry, getEntry, listEntries, duplicateEntry, importSSHConfig, bulkImportEntries, repositionEntry, getRecentConnections, wakeEntry } = require("../controllers/entry");
+const { createEntry, deleteEntry, editEntry, getEntry, listEntries, duplicateEntry, importSSHConfig, bulkImportEntries, exportEntries, repositionEntry, getRecentConnections, wakeEntry } = require("../controllers/entry");
+const { formatJson } = require("../utils/prettyJson");
 const { createServerValidation, updateServerValidation, repositionServerValidation, bulkImportValidation } = require("../validations/server");
 const { validateSchema } = require("../utils/schema");
 
@@ -31,6 +32,32 @@ app.get("/recent", async (req, res) => {
  */
 app.get("/list", async (req, res) => {
     res.json(await listEntries(req.user.id));
+});
+
+/**
+ * GET /entry/export
+ * @summary Export Entries
+ * @description Exports server entries as the JSON document the bulk import consumes: identities, tags and jump
+ * hosts by name, folders as a path relative to the export scope, and every remaining setting under config. Without
+ * parameters everything the caller can see is exported. Proxmox entries are skipped; they are synced, not imported.
+ * @tags Entry
+ * @produces application/json
+ * @security BearerAuth
+ * @param {number} folderId.query - Export only this folder and its subfolders
+ * @param {number} organizationId.query - Export the entries of this organization
+ * @return {object} 200 - Export document
+ */
+app.get("/export", async (req, res) => {
+    const folderId = req.query.folderId ? Number.parseInt(req.query.folderId, 10) : null;
+    const organizationId = req.query.organizationId ? Number.parseInt(req.query.organizationId, 10) : null;
+
+    const result = await exportEntries(req.user.id, { folderId, organizationId });
+    if (result?.code) return res.json(result);
+
+    const date = new Date().toISOString().slice(0, 10);
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="nexterm-entries-${date}.json"`);
+    res.send(formatJson(result));
 });
 
 /**

@@ -96,6 +96,27 @@
       &.open
         transform: rotate(180deg)
 
+    .submenu-arrow-button
+      display: flex
+      align-items: center
+      justify-content: center
+      margin-left: auto
+      padding: 0 0.125rem
+      border-radius: 0.25rem
+      flex-shrink: 0
+
+      .submenu-arrow
+        margin-left: 0
+
+      &:hover
+        background-color: colors.$gray
+
+        .submenu-arrow
+          opacity: 1
+
+      &.open .submenu-arrow
+        transform: rotate(180deg)
+
     &:hover:not(.disabled):not(.custom)
       background-color: colors.$gray
 

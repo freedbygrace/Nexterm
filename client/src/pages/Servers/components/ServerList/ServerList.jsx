@@ -18,7 +18,6 @@ import {
     mdiTag,
     mdiConnection,
     mdiContentCopy,
-    mdiFolderOpen,
     mdiFolderPlus,
     mdiFolderRemove,
     mdiFormTextbox,
@@ -399,14 +398,14 @@ export const ServerList = ({
         return identities?.find(i => i.id === targetId);
     };
     const connect = (id = null, protocol = null) => connectToServer(server?.id, getIdentity(id, protocol), undefined, null, protocol);
-    const connectSFTP = (id = null) => openSFTP(server?.id, getIdentity(id, "sftp"));
     const openBrowserSession = (id = null) => openBrowser(server?.id, getIdentity(id, "ssh"));
 
-    // Protocols of the right-clicked server other than its primary one ("Connect via ...").
+    // Everything the right-clicked server can be opened with, its default first.
     const primaryProtocol = server ? getPrimaryProtocol(server) : null;
-    const secondaryProtocols = server?.type === "server"
-        ? getServerProtocols(server).filter(p => p !== primaryProtocol && p !== "sftp")
+    const connectProtocols = server?.type === "server"
+        ? [primaryProtocol, ...getServerProtocols(server).filter(p => p !== primaryProtocol)].filter(Boolean)
         : [];
+    const canUseProtocol = (protocol) => server?.identities?.length > 0 || isCredentiallessProtocol(protocol);
     const protocolIcon = (protocol) => GUAC_PROTOCOLS.includes(protocol) ? mdiMonitor
         : FILE_PROTOCOLS.includes(protocol) ? mdiFolderNetwork : mdiConsole;
     const connectVia = (protocol, id = null) => {
@@ -821,90 +820,54 @@ export const ServerList = ({
                                         <ContextMenuSeparator />
                                     </>
                                 )}
-                                {(server?.identities?.length > 0 || isCredentiallessProtocol(primaryProtocol)) && (
-                                    <>
-                                        {isCredentiallessProtocol(primaryProtocol) ? (
-                                            <ContextMenuItem
-                                                icon={mdiConnection}
-                                                label={t("servers.contextMenu.connect")}
-                                                onClick={() => connectToServer(server?.id)}
-                                            />
-                                        ) : server.identities.length === 1 ? (
-                                            <ContextMenuItem
-                                                icon={mdiConnection}
-                                                label={t("servers.contextMenu.connect")}
-                                                onClick={() => connect()}
-                                            />
-                                        ) : (
-                                            <ContextMenuItem
-                                                icon={mdiConnection}
-                                                label={t("servers.contextMenu.connect")}
-                                            >
-                                                {server.identities.map((identityId) => (
+                                {/*
+                                  * One "Connect": the row opens the default protocol with the default
+                                  * identity, the chevron holds every other protocol the entry has
+                                  * enabled - and, where there is more than one, the identity to use.
+                                  */}
+                                {canUseProtocol(primaryProtocol) && (
+                                    connectProtocols.length > 1 || server.identities?.length > 1 ? (
+                                        <ContextMenuItem
+                                            icon={mdiConnection}
+                                            label={t("servers.contextMenu.connect")}
+                                            onClick={() => connectVia(primaryProtocol)}
+                                        >
+                                            {connectProtocols.filter(canUseProtocol).map((protocol) => {
+                                                const label = (PROTOCOL_LABELS[protocol] || protocol.toUpperCase())
+                                                    + (protocol === primaryProtocol ? " " + t("servers.contextMenu.defaultSuffix") : "");
+                                                return isCredentiallessProtocol(protocol) || server.identities.length <= 1 ? (
                                                     <ContextMenuItem
-                                                        key={identityId}
-                                                        icon={mdiAccountCircle}
-                                                        label={getIdentityName(identityId)}
-                                                        onClick={() => connect(identityId)}
+                                                        key={protocol}
+                                                        icon={protocolIcon(protocol)}
+                                                        label={label}
+                                                        onClick={() => connectVia(protocol)}
                                                     />
-                                                ))}
-                                            </ContextMenuItem>
-                                        )}
-                                    </>
-                                )}
-
-                                {secondaryProtocols.map((protocol) => (
-                                    (server?.identities?.length > 0 || isCredentiallessProtocol(protocol)) && (
-                                        isCredentiallessProtocol(protocol) || server.identities.length === 1 ? (
-                                            <ContextMenuItem
-                                                key={protocol}
-                                                icon={protocolIcon(protocol)}
-                                                label={t("servers.contextMenu.connectVia", { protocol: PROTOCOL_LABELS[protocol] || protocol.toUpperCase() })}
-                                                onClick={() => connectVia(protocol, isCredentiallessProtocol(protocol) ? null : server.identities[0])}
-                                            />
-                                        ) : (
-                                            <ContextMenuItem
-                                                key={protocol}
-                                                icon={protocolIcon(protocol)}
-                                                label={t("servers.contextMenu.connectVia", { protocol: PROTOCOL_LABELS[protocol] || protocol.toUpperCase() })}
-                                            >
-                                                {server.identities.map((identityId) => (
+                                                ) : (
                                                     <ContextMenuItem
-                                                        key={identityId}
-                                                        icon={mdiAccountCircle}
-                                                        label={getIdentityName(identityId)}
-                                                        onClick={() => connectVia(protocol, identityId)}
-                                                    />
-                                                ))}
-                                            </ContextMenuItem>
-                                        )
+                                                        key={protocol}
+                                                        icon={protocolIcon(protocol)}
+                                                        label={label}
+                                                        onClick={() => connectVia(protocol)}
+                                                    >
+                                                        {server.identities.map((identityId) => (
+                                                            <ContextMenuItem
+                                                                key={identityId}
+                                                                icon={mdiAccountCircle}
+                                                                label={getIdentityName(identityId)}
+                                                                onClick={() => connectVia(protocol, identityId)}
+                                                            />
+                                                        ))}
+                                                    </ContextMenuItem>
+                                                );
+                                            })}
+                                        </ContextMenuItem>
+                                    ) : (
+                                        <ContextMenuItem
+                                            icon={mdiConnection}
+                                            label={t("servers.contextMenu.connect")}
+                                            onClick={() => connectVia(primaryProtocol)}
+                                        />
                                     )
-                                ))}
-
-                                {server?.identities?.length > 0 && hasProtocol(server, "sftp") && primaryProtocol !== "sftp" && (
-                                    <>
-                                        {server.identities.length === 1 ? (
-                                            <ContextMenuItem
-                                                icon={mdiFolderOpen}
-                                                label={t("servers.contextMenu.openSFTP")}
-                                                onClick={() => connectSFTP()}
-                                            />
-                                        ) : (
-                                            <ContextMenuItem
-                                                icon={mdiFolderOpen}
-                                                label={t("servers.contextMenu.openSFTP")}
-                                            >
-                                                {server.identities.map((identityId) => (
-                                                    <ContextMenuItem
-                                                        key={identityId}
-                                                        icon={mdiAccountCircle}
-                                                        label={getIdentityName(identityId)}
-                                                        onClick={() => connectSFTP(identityId)}
-                                                    />
-                                                ))}
-                                            </ContextMenuItem>
-                                        )}
-                                    </>
                                 )}
 
                                 {server?.identities?.length > 0 && hasProtocol(server, "ssh") && (

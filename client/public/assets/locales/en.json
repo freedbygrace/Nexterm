@@ -1697,6 +1697,7 @@
       "quickConnect": "Quick Connect",
       "openSFTP": "Open SFTP",
       "connectVia": "Connect via {{protocol}}",
+      "defaultSuffix": "(default)",
       "openBrowser": "Open Browser",
       "forwardPort": "Forward Port",
       "runScript": "Run Script",

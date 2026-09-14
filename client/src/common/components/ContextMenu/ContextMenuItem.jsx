@@ -20,6 +20,9 @@ export const ContextMenuItem = ({
     const [isMobile, setIsMobile] = useState(false);
 
     const hasSubmenu = children && React.Children.count(children) > 0;
+    // An item that carries both an action and a submenu: the row runs the action ("Connect"),
+    // the arrow opens the choices ("...via RDP"). Hovering still opens the submenu.
+    const splitAction = hasSubmenu && Boolean(onClick);
 
     useEffect(() => {
         const checkMobile = () => setIsMobile(window.innerWidth <= 768);
@@ -82,7 +85,15 @@ export const ContextMenuItem = ({
     const handleClick = (e) => {
         e.stopPropagation();
         if (disabled) return;
-        hasSubmenu ? setIsSubmenuOpen(!isSubmenuOpen) : (onClick?.(e), onClose?.());
+        if (hasSubmenu && !splitAction) return setIsSubmenuOpen(!isSubmenuOpen);
+        onClick?.(e);
+        onClose?.();
+    };
+
+    const handleArrowClick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!disabled) setIsSubmenuOpen(!isSubmenuOpen);
     };
 
     const handleKeyDown = (e) => {
@@ -153,7 +164,13 @@ export const ContextMenuItem = ({
             {checked && !hasSubmenu && <Icon path={mdiCheck} className="menu-check" />}
             {hasSubmenu && (
                 <>
-                    <Icon path={isMobile ? mdiChevronDown : mdiChevronRight} className={`submenu-arrow ${isSubmenuOpen ? "open" : ""}`} />
+                    {splitAction ? (
+                        <span className={`submenu-arrow-button ${isSubmenuOpen ? "open" : ""}`} onClick={handleArrowClick}>
+                            <Icon path={isMobile ? mdiChevronDown : mdiChevronRight} className="submenu-arrow" />
+                        </span>
+                    ) : (
+                        <Icon path={isMobile ? mdiChevronDown : mdiChevronRight} className={`submenu-arrow ${isSubmenuOpen ? "open" : ""}`} />
+                    )}
                     {isSubmenuOpen && (
                         <div ref={submenuRef} className={`context-menu-submenu ${isMobile ? "mobile" : ""}`}
                              style={!isMobile ? submenuPosition : undefined} role="menu" aria-orientation="vertical"

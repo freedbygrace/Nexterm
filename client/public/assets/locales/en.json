@@ -1782,6 +1782,8 @@
       },
       "fields": {
         "name": "Name",
+        "description": "Description",
+        "showDescriptionInList": "Show in list",
         "icon": "Icon",
         "serverIp": "Host",
         "port": "Port",
@@ -1796,6 +1798,7 @@
       },
       "placeholders": {
         "serverName": "Server name",
+        "description": "Short line shown under the name",
         "serverIp": "Hostname or IP",
         "port": "Port",
         "username": "Username",
@@ -2297,9 +2300,12 @@
     },
     "notesPanel": {
       "title": "Notes",
-      "placeholder": "Write notes for this server…",
-      "showInList": "Show in list",
-      "showInListTooltip": "Display the first line of these notes under the server name in the sidebar.",
+      "placeholder": "Write notes for this server… Markdown is supported.",
+      "preview": "Preview",
+      "previewTooltip": "Render these notes as Markdown.",
+      "edit": "Edit",
+      "editTooltip": "Back to writing.",
+      "previewEmpty": "Nothing to preview yet.",
       "status": {
         "saving": "Saving",
         "saved": "Saved",

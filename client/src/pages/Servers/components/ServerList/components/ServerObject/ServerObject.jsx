@@ -135,9 +135,8 @@ export const ServerObject = ({ id, name, position, folderId, organizationId, nes
 
     useEffect(() => () => clearTimeout(hoverTimerRef.current), []);
 
-    const noteLine = server?.showNoteInList
-        ? (server?.notes || "").split(/\r?\n/)[0].trim()
-        : "";
+    // A one-line blurb the user opted into showing; notes are a Markdown scratchpad and stay in their panel.
+    const descriptionLine = server?.showDescriptionInList ? (server?.description || "").trim() : "";
 
     // Multi-protocol entries list their protocols (SFTP is implied by SSH and not worth a chip).
     const protocolChips = server?.type === "server"
@@ -182,7 +181,7 @@ export const ServerObject = ({ id, name, position, folderId, organizationId, nes
             </div>
             <div className="server-text">
                 <p className="server-name truncate-text">{name}</p>
-                {noteLine && <span className="server-note truncate-text">{noteLine}</span>}
+                {descriptionLine && <span className="server-note truncate-text">{descriptionLine}</span>}
             </div>
             {quickConnectOpen && (
                 <div className="quick-connect">

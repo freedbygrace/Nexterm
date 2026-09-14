@@ -1,5 +1,6 @@
-import { mdiFormTextbox, mdiIp, mdiEthernet } from "@mdi/js";
+import { mdiFormTextbox, mdiIp, mdiEthernet, mdiTextShort } from "@mdi/js";
 import Input from "@/common/components/IconInput";
+import ToggleSwitch from "@/common/components/ToggleSwitch";
 import SelectBox from "@/common/components/SelectBox";
 import IconChooser from "../components/IconChooser";
 import ProtocolSelector from "../components/ProtocolSelector";
@@ -35,6 +36,21 @@ const DetailsPage = ({name, setName, icon, setIcon, config, setConfig, fieldConf
                     <label>{t("servers.dialog.fields.icon")}</label>
                     <IconChooser selected={icon} setSelected={setIcon} />
                 </div>
+            </div>
+
+            <div className="form-group">
+                <div className="label-row">
+                    <label htmlFor="description">{t("servers.dialog.fields.description")}</label>
+                    {/* Not a <label>: ToggleSwitch brings its own, and labels must not nest. */}
+                    <span className="inline-toggle">
+                        <span>{t("servers.dialog.fields.showDescriptionInList")}</span>
+                        <ToggleSwitch id="showDescriptionInList" checked={Boolean(config.showDescriptionInList)}
+                                      onChange={(checked) => setConfig(prev => ({ ...prev, showDescriptionInList: checked }))} />
+                    </span>
+                </div>
+                <Input icon={mdiTextShort} type="text" placeholder={t("servers.dialog.placeholders.description")}
+                       id="description" autoComplete="off" value={config.description || ""}
+                       setValue={(value) => setConfig(prev => ({ ...prev, description: value }))} />
             </div>
 
             {showEngineSelect && (

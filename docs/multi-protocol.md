@@ -8,7 +8,7 @@ offers.
 
 Open the server dialog and use the **Protocols** list on the details tab:
 
-- **Toggle** each protocol the host offers: SSH, SFTP, Telnet, RDP, VNC, FTP or FTPS.
+- **Toggle** each protocol the host offers: SSH, SFTP, Telnet, RDP, VNC, SPICE, FTP or FTPS.
 - **Port** is configured per protocol. Enabling SSH also enables SFTP on the same port; you can disable it or give
   it a different port.
 - **Primary** marks the protocol used by the default *Connect* action, by the mobile app and by the CLI. The tab
@@ -29,7 +29,7 @@ entry (`"rdp": { "enabled": true, "port": 3389, "identityId": 12 }`); the list e
 Right-click an entry:
 
 - **Connect** opens the primary protocol.
-- **Connect via RDP / VNC / Telnet / FTP ...** appears for every other enabled protocol.
+- **Connect via RDP / VNC / SPICE / Telnet / FTP ...** appears for every other enabled protocol.
 - **Open SFTP**, **Open Browser**, **Forward Port** and **Run Script** are available whenever the entry exposes SFTP
   or SSH, regardless of which protocol is primary.
 - **Quick Connect** lets you pick the protocol together with one-off credentials.
@@ -72,16 +72,17 @@ which stay in sync:
       "ssh":  { "enabled": true,  "port": 22 },
       "sftp": { "enabled": true,  "port": 22 },
       "rdp":  { "enabled": true,  "port": 3389 },
-      "vnc":  { "enabled": false, "port": 5900 }
+      "vnc":  { "enabled": false, "port": 5900 },
+      "spice": { "enabled": false, "port": 5900 }
     }
   }
 }
 ```
 
 `GET /api/entries/list` returns the enabled protocols as `protocols` (primary first). To open a session over a
-specific protocol, pass it in the `type` field of `POST /api/connections` (`ssh`, `telnet`, `rdp`, `vnc`, `sftp`,
-`ftp`, `ftps`, or `web` for the remote browser); omitting `type` uses the primary protocol. Requests for a protocol that
-is not enabled on the entry are rejected.
+specific protocol, pass it in the `type` field of `POST /api/connections` (`ssh`, `telnet`, `rdp`, `vnc`, `spice`,
+`sftp`, `ftp`, `ftps`, or `web` for the remote browser); omitting `type` uses the primary protocol. Requests for a
+protocol that is not enabled on the entry are rejected.
 
 ### Folders from scripts
 

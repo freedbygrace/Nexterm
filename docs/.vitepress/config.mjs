@@ -69,6 +69,7 @@ export default defineConfig({
                     { text: "SSL/HTTPS", link: "/ssl" },
                     { text: "Reverse Proxy", link: "/reverse-proxy" },
                     { text: "Multi-Protocol Connections", link: "/multi-protocol" },
+                    { text: "Proxmox SPICE Consoles", link: "/proxmox-spice" },
                     { text: "Import & Export", link: "/import-export" },
                     { text: "Releases & Images", link: "/releases" },
                     { text: "Remote Browser", link: "/remote-browser" },

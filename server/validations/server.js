@@ -13,6 +13,9 @@ const configValidation = Joi.object({
     ip: Joi.string().optional(),
     port: Joi.alternatives().try(Joi.string(), Joi.number()).optional(),
     keyboardLayout: Joi.string().optional(),
+    notes: Joi.string().allow("").max(100000).optional(),
+    description: Joi.string().allow("").max(500).optional(),
+    showDescriptionInList: Joi.boolean().optional(),
     monitoringEnabled: Joi.boolean().optional(),
     nodeName: Joi.string().optional(),
     vmid: Joi.alternatives().try(Joi.string(), Joi.number()).optional(),
@@ -85,6 +88,7 @@ module.exports.bulkImportEntryValidation = Joi.object({
     identities: Joi.array().items(identityReference).max(50).optional(),
     tags: Joi.array().items(Joi.string().trim().min(1).max(50)).max(50).optional(),
     notes: Joi.string().allow("").max(10000).optional(),
+    description: Joi.string().allow("").max(500).optional(),
     icon: Joi.string().max(100).optional(),
     monitoring: Joi.boolean().optional(),
     // Jump hosts may be given as entry names in an import; they are resolved to ids per row.

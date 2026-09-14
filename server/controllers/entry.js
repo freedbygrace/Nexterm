@@ -428,7 +428,9 @@ module.exports.listEntries = async (accountId) => {
                 macAddress: entry.config?.macAddress,
                 wakeOnLanEnabled: entry.config?.wakeOnLanEnabled,
                 notes: entry.config?.notes || "",
-                showNoteInList: Boolean(entry.config?.showNoteInList),
+                // A short blurb of its own; notes are a Markdown scratchpad and never shown in the list.
+                description: entry.config?.description || "",
+                showDescriptionInList: Boolean(entry.config?.showDescriptionInList),
                 // Per-protocol reachability from the status checker, or null when unknown / checks disabled.
                 statusDetails: entry.statusDetails
                     ? { checkedAt: entry.statusDetails.checkedAt || null, protocols: entry.statusDetails.protocols || {} }
@@ -777,6 +779,7 @@ module.exports.bulkImportEntries = async (accountId, { entries, folderId = null,
             protocol: built.primary,
             protocols: built.protocols,
             ...(row.notes !== undefined ? { notes: row.notes } : {}),
+            ...(row.description !== undefined ? { description: row.description, showDescriptionInList: true } : {}),
             ...(row.monitoring !== undefined ? { monitoringEnabled: row.monitoring } : {}),
         }, { type: "server" });
 
@@ -1074,10 +1077,10 @@ module.exports.getRecentConnections = async (accountId, limit = 5) => {
 };
 
 /** Config keys the export lifts to top-level fields; everything else is preserved under `config`. */
-const EXPORT_LIFTED_CONFIG_KEYS = new Set(["ip", "port", "protocol", "protocols", "notes", "monitoringEnabled"]);
+const EXPORT_LIFTED_CONFIG_KEYS = new Set(["ip", "port", "protocol", "protocols", "notes", "description", "showDescriptionInList", "monitoringEnabled"]);
 
 /** Key order of an exported entry, so hand-edited files and fresh exports stay comparable. */
-const EXPORT_KEY_ORDER = ["name", "host", "folderPath", "protocols", "primary", "identities", "tags", "notes", "icon", "monitoring", "config"];
+const EXPORT_KEY_ORDER = ["name", "host", "folderPath", "protocols", "primary", "identities", "tags", "description", "notes", "icon", "monitoring", "config"];
 
 const orderExportKeys = (row) => Object.fromEntries(
     EXPORT_KEY_ORDER.filter(key => row[key] !== undefined).map(key => [key, row[key]]),
@@ -1197,6 +1200,7 @@ module.exports.exportEntries = async (accountId, { folderId = null, organization
             primary: config.protocol || getEnabledProtocols(entry)[0],
             identities: identityNames.length ? identityNames : undefined,
             tags: tagsByEntry.get(entry.id),
+            description: config.description || undefined,
             notes: config.notes || undefined,
             icon: entry.icon || undefined,
             monitoring: config.monitoringEnabled === undefined ? undefined : Boolean(config.monitoringEnabled),

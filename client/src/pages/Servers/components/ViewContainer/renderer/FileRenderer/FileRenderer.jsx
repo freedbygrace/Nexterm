@@ -10,7 +10,7 @@ import "./styles.sass";
 import Icon from "@mdi/react";
 import { mdiCloudUpload, mdiClose } from "@mdi/js";
 import { getWebSocketUrl, getBaseUrl } from "@/common/utils/ConnectionUtil.js";
-import { uploadFile as uploadFileRequest, tauriDownload } from "@/common/utils/RequestUtil.js";
+import { uploadFile as uploadFileRequest, uploadChunk, tauriDownload } from "@/common/utils/RequestUtil.js";
 import { isTauri } from "@/common/utils/TauriUtil.js";
 
 const OPERATIONS = {
@@ -28,6 +28,15 @@ const createUploadStats = () => ({ uploaded: 0, failed: 0, cancelled: 0, sentByt
 
 /** Files uploaded at the same time; keeps many small files fast without flooding the SFTP link. */
 const UPLOAD_CONCURRENCY = 3;
+
+/** Files larger than this go up in chunks, so one slow transfer cannot hit the request timeout. */
+const CHUNKED_UPLOAD_THRESHOLD = 8 * 1024 * 1024;
+const UPLOAD_CHUNK_SIZE = 4 * 1024 * 1024;
+const CHUNK_RETRIES = 3;
+
+const randomUploadId = () => `u${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+
+const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 const readAllEntries = (reader) => new Promise((resolve, reject) => {
     const all = [];
@@ -196,6 +205,63 @@ export const FileRenderer = ({ session, disconnectFromServer, setOpenFileEditors
         setUploadRemaining(uploadQueueRef.current.length + uploadInFlightRef.current.size);
     };
 
+    const uploadQuery = (filePath, extra = {}) => new URLSearchParams({
+        sessionId: session.id,
+        path: filePath,
+        sessionToken,
+        ...extra,
+    }).toString();
+
+    /**
+     * Uploads a large file in chunks. Every chunk is retried a few times; if the server reports a
+     * different offset (a dropped connection left a partial chunk) the upload continues from there
+     * instead of starting again.
+     */
+    const uploadFileChunked = async (file, filePath, signal) => {
+        const uploadId = randomUploadId();
+        let offset = 0;
+
+        try {
+            while (offset < file.size) {
+                if (signal?.aborted) throw new Error("Upload cancelled");
+
+                const end = Math.min(offset + UPLOAD_CHUNK_SIZE, file.size);
+                const chunk = file.slice(offset, end);
+                let attempt = 0;
+
+                for (;;) {
+                    try {
+                        const url = `/api/entries/sftp/upload/chunk?${uploadQuery(filePath, { uploadId, offset })}`;
+                        const sentBefore = offset;
+                        await uploadChunk(url, chunk, {
+                            onProgress: (progress) => {
+                                uploadInFlightRef.current.set(file, sentBefore + (progress / 100) * chunk.size);
+                                refreshUploadProgress();
+                            },
+                            signal,
+                        });
+                        offset = end;
+                        break;
+                    } catch (err) {
+                        if (signal?.aborted || err.message === "Upload cancelled") throw err;
+                        if (err.expectedOffset !== undefined) { offset = err.expectedOffset; break; }
+                        if (++attempt >= CHUNK_RETRIES) throw err;
+                        await wait(500 * attempt);
+                    }
+                }
+
+                uploadInFlightRef.current.set(file, offset);
+                refreshUploadProgress();
+            }
+
+            await fetch(`${getBaseUrl()}/api/entries/sftp/upload/finish?${uploadQuery(filePath, { uploadId })}`, { method: "POST" });
+        } catch (err) {
+            // Leave nothing half-written behind on the remote host.
+            fetch(`${getBaseUrl()}/api/entries/sftp/upload?${uploadQuery(filePath, { uploadId })}`, { method: "DELETE" }).catch(() => {});
+            throw err;
+        }
+    };
+
     const uploadFileHttp = async (file, targetDir, signal) => {
         const filePath = joinPath(targetDir, file.name);
         const stats = uploadStatsRef.current;
@@ -203,15 +269,19 @@ export const FileRenderer = ({ session, disconnectFromServer, setOpenFileEditors
         refreshUploadProgress();
 
         try {
-            const url = `/api/entries/sftp/upload?sessionId=${session.id}&path=${encodeURIComponent(filePath)}&sessionToken=${sessionToken}`;
-            await uploadFileRequest(url, file, {
-                onProgress: (progress) => {
-                    uploadInFlightRef.current.set(file, (progress / 100) * file.size);
-                    refreshUploadProgress();
-                },
-                timeout: 5 * 60 * 1000,
-                signal,
-            });
+            if (file.size > CHUNKED_UPLOAD_THRESHOLD) {
+                await uploadFileChunked(file, filePath, signal);
+            } else {
+                const url = `/api/entries/sftp/upload?${uploadQuery(filePath)}`;
+                await uploadFileRequest(url, file, {
+                    onProgress: (progress) => {
+                        uploadInFlightRef.current.set(file, (progress / 100) * file.size);
+                        refreshUploadProgress();
+                    },
+                    timeout: 5 * 60 * 1000,
+                    signal,
+                });
+            }
             stats.uploaded++;
             stats.lastName = file.name;
         } catch (err) {

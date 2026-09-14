@@ -128,6 +128,48 @@ export const uploadFile = async (url, file, { onProgress, timeout = 300000, head
     });
 };
 
+/**
+ * Uploads one chunk of a chunked upload. On an offset mismatch the rejection carries `expectedOffset`,
+ * so the caller can continue from the byte the server actually holds.
+ */
+export const uploadChunk = async (url, blob, { onProgress, signal, timeout = 120000 } = {}) => {
+    const baseUrl = getBaseUrl();
+    const fullUrl = baseUrl ? `${baseUrl}${url}` : url;
+
+    if (signal?.aborted) throw new Error("Upload cancelled");
+
+    return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        if (signal) {
+            const onAbort = () => xhr.abort();
+            signal.addEventListener("abort", onAbort, { once: true });
+            xhr.addEventListener("loadend", () => signal.removeEventListener("abort", onAbort));
+        }
+
+        if (onProgress) {
+            xhr.upload.addEventListener("progress", (e) => {
+                if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
+            });
+        }
+
+        xhr.onload = () => {
+            let payload = {};
+            try { payload = JSON.parse(xhr.responseText); } catch {}
+            if (xhr.status >= 200 && xhr.status < 300) return resolve(payload);
+            const error = new Error(payload.error || `Upload failed (${xhr.status})`);
+            if (payload.expectedOffset !== undefined) error.expectedOffset = payload.expectedOffset;
+            reject(error);
+        };
+        xhr.onerror = () => reject(new Error("Network error"));
+        xhr.onabort = () => reject(new Error("Upload cancelled"));
+        xhr.ontimeout = () => reject(new Error("Upload timed out"));
+        xhr.timeout = timeout;
+
+        xhr.open("POST", fullUrl, true);
+        xhr.setRequestHeader("Content-Type", "application/octet-stream");
+        xhr.send(blob);
+    });
+};
 export const request = async (url, method, body, headers) => {
     url = url.startsWith("/") ? url.substring(1) : url;
     

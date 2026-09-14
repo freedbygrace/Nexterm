@@ -214,6 +214,22 @@
     }
   },
   "audit": {
+    "recording": {
+      "download": "Download recording",
+      "share": "Copy share link",
+      "linkCopied": "Share link copied to the clipboard",
+      "shareFailed": "The share link could not be created",
+      "sharedTitle": "Shared session recording",
+      "lifetimes": {
+        "hour": "Valid for 1 hour",
+        "day": "Valid for 24 hours",
+        "week": "Valid for 7 days"
+      },
+      "errors": {
+        "expired": "This link has expired or the recording is no longer available",
+        "failed": "The recording could not be loaded"
+      }
+    },
     "page": {
       "title": "Audit Logs",
       "subtitle": "Track and monitor all activities across your infrastructure"

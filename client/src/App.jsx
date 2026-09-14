@@ -22,6 +22,7 @@ const Monitoring = lazy(() => import("@/pages/Monitoring"));
 const Audit = lazy(() => import("@/pages/Audit"));
 const Popout = lazy(() => import("@/pages/Popout"));
 const Share = lazy(() => import("@/pages/Share"));
+const SharedRecording = lazy(() => import("@/pages/SharedRecording"));
 const Tunnel = lazy(() => import("@/pages/Tunnel"));
 const Link = lazy(() => import("@/pages/Link"));
 
@@ -79,6 +80,7 @@ const App = () => {
             element: <ShareRoot />,
             errorElement: <RouteErrorPage />,
             children: [
+                { path: "/share/recording/:token", element: <SharedRecording /> },
                 { path: "/share/:shareId", element: <Share /> }
             ],
         },

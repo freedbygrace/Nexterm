@@ -1,0 +1,40 @@
+@use "@/common/styles/colors"
+
+.shared-recording
+  display: flex
+  flex-direction: column
+  gap: 1rem
+  padding: 1.5rem
+  height: 100%
+  box-sizing: border-box
+
+  .shared-recording-header
+    display: flex
+    align-items: center
+    justify-content: space-between
+    gap: 1rem
+
+    h1
+      margin: 0
+      color: colors.$white
+      font-size: 1.25rem
+      font-weight: 600
+
+  .shared-recording-status
+    display: flex
+    flex-direction: column
+    align-items: center
+    justify-content: center
+    gap: 0.75rem
+    flex: 1
+    color: colors.$subtext
+
+    svg
+      width: 2.5rem
+      height: 2.5rem
+
+    &.error svg
+      color: colors.$error
+
+    p
+      margin: 0

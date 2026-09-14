@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import Icon from "@mdi/react";
-import { mdiPlay, mdiPause, mdiRewind, mdiFastForward, mdiLoading, mdiAlertCircleOutline, mdiFullscreen, mdiFullscreenExit } from "@mdi/js";
+import { mdiPlay, mdiPause, mdiRewind, mdiFastForward, mdiLoading, mdiAlertCircleOutline, mdiFullscreen, mdiFullscreenExit, mdiDownload, mdiLinkVariant } from "@mdi/js";
+import { useTranslation } from "react-i18next";
+import { getBaseUrl } from "@/common/utils/ConnectionUtil.js";
+import { postRequest, getToken } from "@/common/utils/RequestUtil.js";
+import { useToast } from "@/common/contexts/ToastContext.jsx";
+import { ContextMenu, ContextMenuItem, useContextMenu } from "@/common/components/ContextMenu";
 import Guacamole from "guacamole-common-js";
 import * as AsciinemaPlayer from "asciinema-player";
 import "asciinema-player/dist/bundle/asciinema-player.css";
@@ -16,7 +21,38 @@ const formatTime = (ms) => {
     return `${minutes}:${seconds}`;
 };
 
-const RecordingPlayerContent = ({ auditLogId, recordingType }) => {
+/** Copies text without the clipboard API, which browsers refuse on plain http (LAN installs). */
+const copyText = async (text) => {
+    try {
+        await navigator.clipboard.writeText(text);
+        return true;
+    } catch {
+        const area = document.createElement("textarea");
+        area.value = text;
+        area.style.position = "fixed";
+        area.style.opacity = "0";
+        document.body.appendChild(area);
+        area.select();
+        const ok = document.execCommand("copy");
+        document.body.removeChild(area);
+        return ok;
+    }
+};
+
+const SHARE_LIFETIMES = [
+    { seconds: 3600, key: "hour" },
+    { seconds: 24 * 3600, key: "day" },
+    { seconds: 7 * 24 * 3600, key: "week" },
+];
+
+/**
+ * @param {string} shareToken - when set the recording is fetched through the public share endpoint
+ *        instead of the audit API, and the download / share actions are hidden.
+ */
+const RecordingPlayerContent = ({ auditLogId, recordingType, shareToken }) => {
+    const { t } = useTranslation();
+    const { sendToast } = useToast();
+    const shareMenu = useContextMenu();
     const containerRef = useRef(null);
     const playerRef = useRef(null);
     const playerContentRef = useRef(null);
@@ -24,6 +60,27 @@ const RecordingPlayerContent = ({ auditLogId, recordingType }) => {
     const [state, setState] = useState({ loading: true, error: null, playing: false, duration: 0, position: 0, fullscreen: false });
 
     const updateState = (changes) => setState(prevState => ({ ...prevState, ...changes }));
+
+    const downloadRecording = () => {
+        const url = `${getBaseUrl()}/api/audit/recordings/${auditLogId}/download?sessionToken=${getToken()}`;
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = "";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+    const createShareLink = async (expiresIn) => {
+        shareMenu.close();
+        try {
+            const response = await postRequest(`audit/recordings/${auditLogId}/share`, { expiresIn });
+            const copied = await copyText(response.url);
+            sendToast(t("common.success"), copied ? t("audit.recording.linkCopied") : response.url);
+        } catch (error) {
+            sendToast(t("common.error"), error.message || t("audit.recording.shareFailed"));
+        }
+    };
 
     const handleFullscreen = useCallback(() => {
         if (!playerContentRef.current) return;
@@ -78,7 +135,10 @@ const RecordingPlayerContent = ({ auditLogId, recordingType }) => {
 
         (async () => {
             try {
-                const response = await getRawRequest(`audit/${auditLogId}/recording`);
+                const response = shareToken
+                    ? await fetch(`${getBaseUrl()}/api/share/recording/${shareToken}?inline=true`)
+                    : await getRawRequest(`audit/${auditLogId}/recording`);
+                if (!response.ok) throw new Error("Request failed");
 
                 if (recordingType === "guac") {
                     const recording = new Guacamole.SessionRecording(await response.blob());
@@ -193,7 +253,7 @@ const RecordingPlayerContent = ({ auditLogId, recordingType }) => {
             playerRef.current?.dispose?.();
             playerRef.current = null;
         };
-    }, [auditLogId, recordingType]);
+    }, [auditLogId, recordingType, shareToken]);
 
     useEffect(() => {
         const handleKeyDown = (event) => {
@@ -234,12 +294,34 @@ const RecordingPlayerContent = ({ auditLogId, recordingType }) => {
                         <span className="time-display">{formatTime(state.duration)}</span>
                     </div>
                     <div className="controls-right">
+                        {!shareToken && (
+                            <>
+                                <button className="control-btn" onClick={downloadRecording}
+                                        title={t("audit.recording.download")}>
+                                    <Icon path={mdiDownload} size={0.9} />
+                                </button>
+                                <button className="control-btn" ref={shareMenu.triggerRef}
+                                        onClick={(event) => shareMenu.open(event, { x: event.clientX, y: event.clientY })}
+                                        title={t("audit.recording.share")}>
+                                    <Icon path={mdiLinkVariant} size={0.9} />
+                                </button>
+                            </>
+                        )}
                         <button className="control-btn" onClick={handleFullscreen}>
                             <Icon path={state.fullscreen ? mdiFullscreenExit : mdiFullscreen} size={0.9} />
                         </button>
                     </div>
                 </div>
             )}
+
+            <ContextMenu isOpen={shareMenu.isOpen} position={shareMenu.position} onClose={shareMenu.close}
+                         trigger={shareMenu.triggerRef}>
+                {SHARE_LIFETIMES.map(({ seconds, key }) => (
+                    <ContextMenuItem key={key} icon={mdiLinkVariant}
+                                     label={t(`audit.recording.lifetimes.${key}`)}
+                                     onClick={() => createShareLink(seconds)} />
+                ))}
+            </ContextMenu>
         </div>
     );
 };
@@ -248,4 +330,9 @@ export const RecordingPlayer = ({ auditLogId, recordingType, onClose }) => (
     <DialogProvider open={true} onClose={onClose}>
         <RecordingPlayerContent auditLogId={auditLogId} recordingType={recordingType} />
     </DialogProvider>
+);
+
+/** The same player without the dialog frame, for the public share page. */
+export const SharedRecordingPlayer = ({ shareToken, recordingType }) => (
+    <RecordingPlayerContent shareToken={shareToken} recordingType={recordingType} />
 );

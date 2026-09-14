@@ -103,6 +103,16 @@ identities; see [Import & Export](/import-export).
 Existing entries are migrated automatically: each one gets a map containing its previous protocol (plus SFTP for SSH
 entries), so nothing changes until you enable more.
 
+## Uploads
+
+Files are uploaded three at a time. Anything larger than 8 MB is sent in 4 MB chunks, so a slow transfer
+cannot run into the request timeout; each chunk is retried up to three times, and if a connection drops
+mid-file the upload resumes from the byte the server already holds instead of starting again. Unfinished
+uploads live next to the destination as `<name>.<id>.nexterm-part` and are removed when the upload is
+cancelled or fails.
+
+The status pill in the bottom right corner shows how many files are left and cancels the whole queue.
+
 ## Copying the current path
 
 The file manager can copy a remote path to the clipboard: **Copy path** in an item's context menu (one path

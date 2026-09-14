@@ -684,6 +684,8 @@ class _ServersScreenState extends State<ServersScreen> {
           options.add(_ConnectionOption('rdp', ConnectionType.guacamole, MdiIcons.microsoftWindows, 'RDP', 'Remote desktop'));
         case 'vnc':
           options.add(_ConnectionOption('vnc', ConnectionType.guacamole, MdiIcons.remoteDesktop, 'VNC', 'Remote desktop'));
+        case 'spice':
+          options.add(_ConnectionOption('spice', ConnectionType.guacamole, MdiIcons.monitor, 'SPICE', 'Remote desktop'));
         case 'sftp':
           options.add(_ConnectionOption('sftp', ConnectionType.sftp, MdiIcons.folderOutline, 'SFTP', 'File manager'));
         case 'ftp':
@@ -722,6 +724,7 @@ class _ServersScreenState extends State<ServersScreen> {
     final p = server.protocol?.toLowerCase();
     if (p == 'rdp') return MdiIcons.microsoftWindows;
     if (p == 'vnc') return MdiIcons.remoteDesktop;
+    if (p == 'spice') return MdiIcons.monitor;
     final icon = server.icon;
     if (icon == null || !icon.startsWith('mdi')) return MdiIcons.server;
     final camel = icon.substring(3, 4).toLowerCase() + icon.substring(4);

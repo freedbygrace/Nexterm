@@ -14,6 +14,11 @@ const COLOR_DEPTHS = [
     { label: "True color (32-bit)", value: "32" },
 ];
 
+const CONSOLE_TYPES = [
+    { label: "VNC", value: "vnc" },
+    { label: "SPICE", value: "spice" },
+];
+
 const RESIZE_METHODS = [
     { label: "Display Update (recommended)", value: "display-update" },
     { label: "Reconnect", value: "reconnect" },
@@ -86,6 +91,7 @@ const SettingsPage = ({ config, setConfig, monitoringEnabled, setMonitoringEnabl
     const [wakeOnLanEnabled, setWakeOnLanEnabled] = useState(config?.wakeOnLanEnabled === true);
     const [statusCheckEnabled, setStatusCheckEnabled] = useState(config?.statusCheckEnabled !== false);
     const [rdpSecurity, setRdpSecurity] = useState(config?.rdpSecurity || "");
+    const [consoleType, setConsoleType] = useState(config?.consoleType || "vnc");
     const [backspaceMode, setBackspaceMode] = useState(config?.backspaceMode || "del");
     const [deleteMode, setDeleteMode] = useState(config?.deleteMode || "vt");
     const [functionKeyMode, setFunctionKeyMode] = useState(config?.functionKeyMode || "xterm");
@@ -117,6 +123,7 @@ const SettingsPage = ({ config, setConfig, monitoringEnabled, setMonitoringEnabl
         if (config?.wakeOnLanEnabled !== undefined) setWakeOnLanEnabled(config.wakeOnLanEnabled);
         if (config?.statusCheckEnabled !== undefined) setStatusCheckEnabled(config.statusCheckEnabled !== false);
         if (config?.rdpSecurity !== undefined) setRdpSecurity(config.rdpSecurity);
+        if (config?.consoleType !== undefined) setConsoleType(config.consoleType);
         if (config?.backspaceMode !== undefined) setBackspaceMode(config.backspaceMode);
         if (config?.deleteMode !== undefined) setDeleteMode(config.deleteMode);
         if (config?.functionKeyMode !== undefined) setFunctionKeyMode(config.functionKeyMode);
@@ -176,7 +183,7 @@ const SettingsPage = ({ config, setConfig, monitoringEnabled, setMonitoringEnabl
     const showJumpHosts = Boolean(fieldConfig.showJumpHosts);
     const showTelnetAutoLogin = Boolean(fieldConfig.showTelnetAutoLogin);
 
-    if (!fieldConfig.showMonitoring && !fieldConfig.showKeyboardLayout && !fieldConfig.showDisplaySettings && !fieldConfig.showAudioSettings && !fieldConfig.showWakeOnLan && !fieldConfig.showTerminalSettings && !showJumpHosts && !showTelnetAutoLogin) {
+    if (!fieldConfig.showMonitoring && !fieldConfig.showKeyboardLayout && !fieldConfig.showConsoleType && !fieldConfig.showDisplaySettings && !fieldConfig.showAudioSettings && !fieldConfig.showWakeOnLan && !fieldConfig.showTerminalSettings && !showJumpHosts && !showTelnetAutoLogin) {
         return <p className="text-center">{t('servers.dialog.settings.noSettings')}</p>;
     }
 
@@ -389,6 +396,31 @@ const SettingsPage = ({ config, setConfig, monitoringEnabled, setMonitoringEnabl
                         <label>{t('servers.dialog.settings.keyboardLayout.title')}</label>
                         <SelectBox options={KEYBOARD_LAYOUTS} selected={keyboardLayout} setSelected={handleKeyboardLayoutChange} />
                         <p className="keyboard-layout-description">{t('servers.dialog.settings.keyboardLayout.description')}</p>
+                    </div>
+                </div>
+            )}
+
+            {fieldConfig.showConsoleType && (
+                <div className="jump-hosts-section">
+                    <div className="jump-hosts-header">
+                        <div className="jump-hosts-info">
+                            <span className="jump-hosts-label">
+                                <Icon path={mdiMonitor} size={0.8} style={{ marginRight: '8px', verticalAlign: 'middle' }} />
+                                {t('servers.dialog.settings.console.title')}
+                            </span>
+                            <span className="jump-hosts-description">
+                                {t('servers.dialog.settings.console.description')}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div className="form-group">
+                        <label>{t('servers.dialog.settings.console.type')}</label>
+                        <SelectBox
+                            options={CONSOLE_TYPES}
+                            selected={consoleType}
+                            setSelected={(val) => handleDisplaySettingChange('consoleType', val, setConsoleType)}
+                        />
                     </div>
                 </div>
             )}

@@ -309,7 +309,7 @@ class SessionManager extends ChangeNotifier {
     // Sessions carry the protocol they were opened with; older servers only expose the entry's primary.
     final protocol = (config['protocol'] as String?)?.toLowerCase() ?? server.protocol?.toLowerCase();
     if (protocol == 'sftp' || protocol == 'ftp' || protocol == 'ftps') return ConnectionType.sftp;
-    if (protocol == 'rdp' || protocol == 'vnc' || renderer == 'guac') {
+    if (protocol == 'rdp' || protocol == 'vnc' || protocol == 'spice' || renderer == 'guac') {
       return ConnectionType.guacamole;
     }
     return ConnectionType.terminal;

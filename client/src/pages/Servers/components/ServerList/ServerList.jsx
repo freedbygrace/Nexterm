@@ -663,6 +663,11 @@ export const ServerList = ({
                                             label={t("servers.contextMenu.vncServer")}
                                             onClick={() => createServer("vnc")}
                                         />
+                                        <ContextMenuItem
+                                            icon={mdiMonitor}
+                                            label={t("servers.contextMenu.spiceServer")}
+                                            onClick={() => createServer("spice")}
+                                        />
                                         <ContextMenuSeparator />
                                         <ContextMenuItem
                                             icon={mdiFolderNetwork}

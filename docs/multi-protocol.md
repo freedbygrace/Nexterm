@@ -97,5 +97,8 @@ missing, so running the same import twice never produces duplicate folders. An a
 (`["Prod", "Web", "EU"]`) if a folder name contains a slash. `PUT /api/folders` follows the same rule and returns the
 existing folder when a sibling with the same name already exists.
 
+Entries can also be exported and re-imported as JSON, including their protocol map and per-protocol
+identities; see [Import & Export](/import-export).
+
 Existing entries are migrated automatically: each one gets a map containing its previous protocol (plus SFTP for SSH
 entries), so nothing changes until you enable more.

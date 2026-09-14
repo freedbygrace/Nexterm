@@ -69,17 +69,20 @@ app.get("/", authenticate, async (req, res) => {
 /**
  * DELETE /enrollment/{id}
  * @summary Revoke an Enrollment Token
- * @description Revokes an enrollment token so its command stops working. Hosts already enrolled keep working: the key
- * stays installed and the identity is untouched.
+ * @description Revokes an enrollment token so its command stops working and, unless `keepIdentity` is set, disables the
+ * identity it created. The installed public key stays on the host, but Nexterm refuses to use the private key, so
+ * hosts enrolled with this token can no longer be connected to until the identity is enabled again.
  * @tags Enrollment
  * @produces application/json
  * @security BearerAuth
  * @param {number} id.path.required - The enrollment token to revoke
+ * @param {boolean} keepIdentity.query - Only stop new enrollments and leave the hosts already enrolled reachable
  * @return {object} 200 - Token revoked
  * @return {object} 404 - Token not found
  */
 app.delete("/:id", authenticate, async (req, res) => {
-    const result = await revokeEnrollmentToken(req.user.id, Number.parseInt(req.params.id, 10));
+    const keepIdentity = req.query.keepIdentity === "true" || req.query.keepIdentity === "1";
+    const result = await revokeEnrollmentToken(req.user.id, Number.parseInt(req.params.id, 10), { keepIdentity });
     if (result?.code) return res.status(result.code).json(result);
     res.json(result);
 });

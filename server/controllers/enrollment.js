@@ -20,7 +20,7 @@ const MAX_LIFETIME_DAYS = 365;
 const generateToken = () => crypto.randomBytes(TOKEN_BYTES).toString("base64url");
 
 /** Everything about a token except the secret itself and the private key. */
-const toPublicToken = (token, publicKey) => ({
+const toPublicToken = (token, publicKey, identityDisabled = false) => ({
     id: token.id,
     name: token.name,
     organizationId: token.organizationId,
@@ -34,6 +34,8 @@ const toPublicToken = (token, publicKey) => ({
     createEntries: token.createEntries,
     lastUsedAt: token.lastUsedAt,
     createdAt: token.createdAt,
+    // Whether the key this token installed can still open a connection.
+    identityDisabled,
     ...(publicKey ? { publicKey, fingerprint: fingerprint(publicKey) } : {}),
 });
 
@@ -130,10 +132,22 @@ module.exports.listEnrollmentTokens = async (accountId, organizationId = null) =
         order: [["createdAt", "DESC"]],
     });
 
-    return Promise.all(tokens.map(async token => toPublicToken(token, await publicKeyOf(token.identityId))));
+    const identities = await Identity.findAll({ where: { id: { [Op.in]: tokens.map(t => t.identityId) } } });
+    const disabledById = new Map(identities.map(i => [i.id, !!i.disabled]));
+
+    return Promise.all(tokens.map(async token =>
+        toPublicToken(token, await publicKeyOf(token.identityId), disabledById.get(token.identityId) === true)));
 };
 
-module.exports.revokeEnrollmentToken = async (accountId, tokenId) => {
+/**
+ * Revokes a token and, by default, disables the identity it created.
+ *
+ * Revoking on its own only stops new hosts from enrolling; the key is already installed on every host
+ * that ran the command, and Nexterm would happily keep using it. Disabling the identity is what
+ * actually cuts the connections off. Pass `keepIdentity` to stop new enrollments while leaving the
+ * hosts already enrolled reachable.
+ */
+module.exports.revokeEnrollmentToken = async (accountId, tokenId, options = {}) => {
     const token = await EnrollmentToken.findByPk(tokenId, { raw: false });
     if (!token) return { code: 404, message: "Enrollment token not found" };
 
@@ -144,9 +158,25 @@ module.exports.revokeEnrollmentToken = async (accountId, tokenId) => {
         return { code: 403, message: "You don't have permission to revoke this enrollment token" };
     }
 
+    const disableIdentity = options.keepIdentity !== true;
+
     await token.update({ revokedAt: new Date() });
-    logger.info("Enrollment token revoked", { accountId, tokenId });
-    return { success: true };
+    if (disableIdentity) await Identity.update({ disabled: true }, { where: { id: token.identityId } });
+
+    if (disableIdentity) {
+        await createAuditLog({
+            accountId,
+            organizationId: token.organizationId,
+            action: AUDIT_ACTIONS.IDENTITY_UPDATE,
+            resource: RESOURCE_TYPES.IDENTITY,
+            resourceId: token.identityId,
+            details: { name: token.name, enrollment: true, disabled: true },
+        });
+        stateBroadcaster.broadcast("IDENTITIES", { accountId, organizationId: token.organizationId });
+    }
+
+    logger.info("Enrollment token revoked", { accountId, tokenId, identityDisabled: disableIdentity });
+    return { success: true, identityDisabled: disableIdentity };
 };
 
 /** Serves the shell script for a token, or an error when the token cannot be used. */

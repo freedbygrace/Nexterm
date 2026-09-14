@@ -58,12 +58,11 @@ class ServerService {
 
   static bool isGuacamoleServer(Map<String, dynamic>? entry) {
     if (entry == null) return false;
-    final protocol = (entry['protocol'] as String?)?.toLowerCase();
-    return protocol == 'rdp' || protocol == 'vnc';
+    return isGuacamoleProtocol(entry['protocol'] as String?);
   }
 
   static bool isGuacamoleProtocol(String? protocol) {
     final p = protocol?.toLowerCase();
-    return p == 'rdp' || p == 'vnc';
+    return p == 'rdp' || p == 'vnc' || p == 'spice';
   }
 }

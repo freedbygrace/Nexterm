@@ -1586,6 +1586,7 @@
       "telnetServer": "Telnet Server",
       "rdpServer": "RDP Server",
       "vncServer": "VNC Server",
+      "spiceServer": "SPICE Server",
       "demoServer": "Demo Connection",
       "sftpServer": "SFTP Server",
       "ftpServer": "FTP Server",
@@ -1755,6 +1756,11 @@
         "keyboardLayout": {
           "title": "Keyboard Layout",
           "description": "Select the keyboard layout to use for this connection."
+        },
+        "console": {
+          "title": "Console",
+          "description": "Choose which console Proxmox VE opens for this virtual machine",
+          "type": "Console Type"
         },
         "display": {
           "title": "Display Settings",

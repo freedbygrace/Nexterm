@@ -6,17 +6,18 @@
  * protocols into `entry.protocols` (array, primary first).
  */
 
-export const PROTOCOLS = ["ssh", "telnet", "rdp", "vnc", "sftp", "ftp", "ftps", "demo"];
+export const PROTOCOLS = ["ssh", "telnet", "rdp", "vnc", "spice", "sftp", "ftp", "ftps", "demo"];
 
-export const DEFAULT_PORTS = { ssh: 22, telnet: 23, rdp: 3389, vnc: 5900, sftp: 22, ftp: 21, ftps: 21, demo: 0 };
+export const DEFAULT_PORTS = { ssh: 22, telnet: 23, rdp: 3389, vnc: 5900, spice: 5900, sftp: 22, ftp: 21, ftps: 21, demo: 0 };
 
-export const PROTOCOL_LABELS = { ssh: "SSH", telnet: "Telnet", rdp: "RDP", vnc: "VNC", sftp: "SFTP", ftp: "FTP", ftps: "FTPS", demo: "Demo" };
+export const PROTOCOL_LABELS = { ssh: "SSH", telnet: "Telnet", rdp: "RDP", vnc: "VNC", spice: "SPICE", sftp: "SFTP", ftp: "FTP", ftps: "FTPS", demo: "Demo" };
 
 export const PROTOCOL_RENDERERS = {
     ssh: "terminal",
     telnet: "terminal",
     rdp: "guac",
     vnc: "guac",
+    spice: "guac",
     demo: "guac",
     sftp: "sftp",
     ftp: "sftp",
@@ -25,12 +26,12 @@ export const PROTOCOL_RENDERERS = {
 };
 
 export const TERMINAL_PROTOCOLS = ["ssh", "telnet"];
-export const GUAC_PROTOCOLS = ["rdp", "vnc", "demo"];
+export const GUAC_PROTOCOLS = ["rdp", "vnc", "spice", "demo"];
 export const FILE_PROTOCOLS = ["sftp", "ftp", "ftps"];
 export const CREDENTIALLESS_PROTOCOLS = ["telnet", "demo"];
 
 /** Protocols the user can pick in the server dialog (demo is dev-only and seeded separately). */
-export const SELECTABLE_PROTOCOLS = ["ssh", "sftp", "telnet", "rdp", "vnc", "ftp", "ftps"];
+export const SELECTABLE_PROTOCOLS = ["ssh", "sftp", "telnet", "rdp", "vnc", "spice", "ftp", "ftps"];
 
 export const isCredentiallessProtocol = (protocol) => CREDENTIALLESS_PROTOCOLS.includes(protocol);
 

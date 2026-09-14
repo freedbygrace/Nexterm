@@ -47,6 +47,16 @@ const PROTOCOL_FIELDS = {
         allowedAuthTypes: ["password-only", "password"],
         showWakeOnLan: true,
     },
+    spice: {
+        showIpPort: true,
+        showIdentities: true,
+        showSettings: true,
+        showDisplaySettings: true,
+        showAudioSettings: true,
+        showJumpHosts: true,
+        allowedAuthTypes: ["password-only", "password"],
+        showWakeOnLan: true,
+    },
     demo: {
         showIpPort: false,
         showIdentities: false,
@@ -147,6 +157,7 @@ export const getFieldConfig = (type, protocols) => {
             showSettings: true,
             showMonitoring: false,
             showKeyboardLayout: false,
+            showConsoleType: true,
             showDisplaySettings: true,
             showAudioSettings: true,
         };

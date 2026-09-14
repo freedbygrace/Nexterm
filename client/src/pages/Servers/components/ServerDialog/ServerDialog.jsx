@@ -13,12 +13,12 @@ import { useToast } from "@/common/contexts/ToastContext.jsx";
 import { useTranslation } from "react-i18next";
 import { getAvailableTabs, validateRequiredFields, getFieldConfig } from "./utils/fieldConfig.js";
 import {
-    DEFAULT_PORTS, PROTOCOL_LABELS, getEnabledProtocolsFromConfig, getProtocolPortFromConfig, seedProtocolMap,
+    DEFAULT_PORTS, GUAC_PROTOCOLS, PROTOCOL_LABELS, getEnabledProtocolsFromConfig, getProtocolPortFromConfig, seedProtocolMap,
 } from "@/common/utils/ProtocolUtil.js";
 import Icon from "@mdi/react";
 import * as mdiIcons from "@mdi/js";
 
-const PROTOCOL_DEFAULT_ICONS = { ssh: "mdiConsole", telnet: "mdiConsole", rdp: "mdiMicrosoftWindows", vnc: "mdiMonitor", sftp: "mdiFolderNetwork", ftp: "mdiFolderNetwork", ftps: "mdiFolderNetwork", demo: "mdiFlaskOutline" };
+const PROTOCOL_DEFAULT_ICONS = { ssh: "mdiConsole", telnet: "mdiConsole", rdp: "mdiMicrosoftWindows", vnc: "mdiMonitor", spice: "mdiMonitor", sftp: "mdiFolderNetwork", ftp: "mdiFolderNetwork", ftps: "mdiFolderNetwork", demo: "mdiFlaskOutline" };
 
 /** Settings that only apply to graphical (RDP/VNC) sessions. */
 const GUAC_ONLY_SETTINGS = [
@@ -201,7 +201,7 @@ export const ServerDialog = ({ open, onClose, currentFolderId, currentOrganizati
             delete finalConfig.telnetPasswordPrompt;
         }
 
-        if (entryType === "server" && !enabledProtocols.includes("rdp") && !enabledProtocols.includes("vnc")) {
+        if (entryType === "server" && !enabledProtocols.some(p => GUAC_PROTOCOLS.includes(p))) {
             for (const key of GUAC_ONLY_SETTINGS) delete finalConfig[key];
         }
 

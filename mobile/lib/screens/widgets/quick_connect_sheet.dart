@@ -20,6 +20,7 @@ List<String> allowedAuthTypesFor(String? protocol) {
   switch (protocol?.toLowerCase()) {
     case 'rdp':
     case 'vnc':
+    case 'spice':
       return const ['password-only', 'password'];
     case 'ssh':
     default:

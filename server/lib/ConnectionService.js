@@ -14,12 +14,21 @@ const { SessionType } = require("./generated/control_plane_generated");
 const controlPlane = require("./controlPlane/ControlPlaneServer");
 const { isRecordingEnabled } = require("../utils/recordingService");
 const EngineSftpClient = require("./EngineSftpClient");
-const { buildPveQemuParams, buildRdpParams, buildVncParams, buildWebParams, buildDemoParams } = require("./guacParamBuilders");
+const {
+    buildPveQemuParams,
+    buildPveQemuSpiceParams,
+    buildRdpParams,
+    buildVncParams,
+    buildSpiceParams,
+    buildWebParams,
+    buildDemoParams,
+} = require("./guacParamBuilders");
 const { getPrimaryProtocol, getProtocolPort, DEFAULT_PORTS, FILE_PROTOCOLS } = require("../utils/entryProtocols");
 
 const GUAC_PROTOCOLS = {
     rdp: { sessionType: SessionType.RDP, defaultPort: 3389 },
     vnc: { sessionType: SessionType.VNC, defaultPort: 5900 },
+    spice: { sessionType: SessionType.SPICE, defaultPort: 5900 },
     "pve-qemu": { sessionType: SessionType.VNC, defaultPort: 5900 },
     demo: { sessionType: SessionType.Demo, defaultPort: 0 },
 };
@@ -181,6 +190,7 @@ const createConnectionForSession = async (sessionId, accountId) => {
         case "pve-qemu":
         case "rdp":
         case "vnc":
+        case "spice":
         case "demo": return prepareGuacamoleSession(sessionId, entry, identity, organizationId);
         case "sftp":
         case "ftp":
@@ -537,13 +547,20 @@ const prepareGuacamoleSession = async (sessionId, entry, identity, organizationI
     const protocol = getSessionProtocol(session, entry);
     const cfg = entry.config || {};
 
+    // A pve-qemu entry opens either the VNC or the SPICE console of the VM.
+    const pveSpice = entry.type === "pve-qemu" && cfg.consoleType === "spice";
+
     let params;
-    if (entry.type === "pve-qemu") {
+    if (pveSpice) {
+        params = await buildPveQemuSpiceParams(entry);
+    } else if (entry.type === "pve-qemu") {
         params = await buildPveQemuParams(entry);
     } else if (protocol === "rdp") {
         params = await buildRdpParams(cfg, identity, session.accountId);
     } else if (protocol === "vnc") {
         params = await buildVncParams(cfg, identity);
+    } else if (protocol === "spice") {
+        params = await buildSpiceParams(cfg, identity);
     } else if (protocol === "demo") {
         params = await buildDemoParams();
     } else {
@@ -551,14 +568,24 @@ const prepareGuacamoleSession = async (sessionId, entry, identity, organizationI
     }
 
     // Multi-protocol entries carry one port per protocol; the builders only know the legacy `config.port`.
-    if (entry.type === "server" && (protocol === "rdp" || protocol === "vnc")) {
+    if (entry.type === "server" && (protocol === "rdp" || protocol === "vnc" || protocol === "spice")) {
         params.port = String(getProtocolPort(entry, protocol));
     }
 
-    const { sessionType, defaultPort } = GUAC_PROTOCOLS[protocol] ?? GUAC_PROTOCOLS.vnc;
+    const { sessionType, defaultPort } = pveSpice
+        ? GUAC_PROTOCOLS.spice
+        : GUAC_PROTOCOLS[protocol] ?? GUAC_PROTOCOLS.vnc;
     const host = params.hostname || cfg.ip || "";
-    const port = Number.parseInt(params.port || cfg.port || defaultPort, 10);
-    const jumpHosts = await resolveJumpHosts(entry);
+    // A TLS-only SPICE console has no plaintext port; its tls-port is the real target.
+    const port = Number.parseInt(params.port || params["tls-port"] || cfg.port || defaultPort, 10);
+
+    // The Proxmox SPICE host is an opaque proxy routing token rather than a
+    // reachable address, so it cannot be tunnelled; the engine reaches the VM
+    // through the SPICE proxy itself.
+    const jumpHosts = pveSpice ? [] : await resolveJumpHosts(entry);
+    if (pveSpice && (entry.config?.jumpHosts?.length || 0) > 0) {
+        logger.warn("Jump hosts are ignored for Proxmox SPICE consoles", { sessionId });
+    }
 
     const { dataSocket, result } = await openEngineSessionWithResult(
         sessionId, sessionType, host, port, params, jumpHosts, entry.config?.engineId

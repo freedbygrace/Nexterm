@@ -48,6 +48,34 @@ module.exports.openVNCConsole = async (server = { ip: "", port: 0 }, node, vmId,
     return pveRequest(server, "POST", `/nodes/${node}/qemu/${vmId}/vncproxy`, ticket, { websocket: 0 });
 };
 
+/**
+ * Brokers a SPICE console for a QEMU VM. The returned ticket is single-use and
+ * expires within ~30 seconds, so this must be called immediately before the
+ * SPICE session is opened.
+ *
+ * Returns `{ host, proxy, tlsPort, password, ca, hostSubject }` where `host` is
+ * an opaque `pvespiceproxy:…` routing token (used as the SPICE hostname), `proxy`
+ * is the HTTP SPICE proxy to connect through (usually port 3128), and `ca` is the
+ * cluster CA in PEM form (PVE escapes its newlines, which are restored here).
+ */
+module.exports.openSPICEConsole = async (server = { ip: "", port: 0 }, node, vmId, ticket) => {
+    const data = await pveRequest(server, "POST", `/nodes/${node}/qemu/${vmId}/spiceproxy`, ticket, {});
+
+    const tlsPort = Number.parseInt(data?.["tls-port"], 10);
+    if (!data?.host || !data?.proxy || !Number.isFinite(tlsPort)) {
+        throw new Error("Proxmox spiceproxy response is missing host, proxy or tls-port");
+    }
+
+    return {
+        host: data.host,
+        proxy: data.proxy,
+        tlsPort,
+        password: data.password || "",
+        ca: (data.ca || "").replace(/\\n/g, "\n"),
+        hostSubject: data["host-subject"] || "",
+    };
+};
+
 module.exports.getNodeForServer = async (server, ticket) => {
     if (server.nodeName) {
         return server.nodeName;

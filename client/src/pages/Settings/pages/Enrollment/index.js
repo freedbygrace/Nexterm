@@ -1,0 +1,1 @@
+export { EnrollmentPage as default } from "./EnrollmentPage.jsx";

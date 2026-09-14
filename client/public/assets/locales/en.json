@@ -606,6 +606,7 @@
       "fileManager": "File Manager",
       "keymaps": "Keymaps",
       "identities": "Identities",
+      "enrollment": "Enrollment",
       "sessions": "Sessions",
       "organizations": "Organizations",
       "users": "Users",
@@ -1314,6 +1315,83 @@
           "updateSuccess": "Identity updated successfully",
           "createFailed": "Failed to create identity",
           "updateFailed": "Failed to update identity"
+        }
+      }
+    },
+    "enrollment": {
+      "title": "Enrollment Tokens",
+      "description": "Create a one-line command that installs a Nexterm key on a host and adds it as a connection.",
+      "createToken": "Create Token",
+      "personal": "Personal",
+      "organization": "Organization",
+      "revoke": "Revoke token",
+      "revokeConfirm": "Are you sure you want to revoke \"{{name}}\"? The command stops working immediately. Hosts that already enrolled keep their key and connection.",
+      "revokeSuccess": "Enrollment token revoked",
+      "revokeError": "Failed to revoke enrollment token",
+      "loadError": "Failed to load enrollment tokens",
+      "noTokens": "No Enrollment Tokens",
+      "noTokensDescription": "Create a token to enroll a host with a single command, or straight from cloud-init.",
+      "usesLimited": "{{uses}} / {{maxUses}} uses",
+      "usesUnlimited": "{{uses}} uses",
+      "states": {
+        "active": "Active",
+        "revoked": "Revoked",
+        "expired": "Expired",
+        "usedUp": "Used up"
+      },
+      "expiry": {
+        "never": "Never expires",
+        "expired": "Expired",
+        "inDays_one": "Expires in {{count}} day",
+        "inDays_other": "Expires in {{count}} days",
+        "inHours_one": "Expires in {{count}} hour",
+        "inHours_other": "Expires in {{count}} hours"
+      },
+      "fields": {
+        "username": "Target user",
+        "uses": "Uses",
+        "expiry": "Expiry",
+        "fingerprint": "Key fingerprint"
+      },
+      "dialog": {
+        "createTitle": "Create Enrollment Token",
+        "resultTitle": "\"{{name}}\" is ready",
+        "shownOnce": "This command contains the token and is shown only once. Copy it now - it cannot be retrieved later.",
+        "command": "Run this on the host",
+        "commandHint": "Installs the key for the target user and reports the host back to Nexterm.",
+        "cloudInit": "Cloud-init",
+        "cloudInitHint": "Paste this as the user data of a new machine to enroll it on first boot.",
+        "copyFailed": "Failed to copy to clipboard",
+        "createFailed": "Failed to create enrollment token",
+        "fields": {
+          "name": "Name",
+          "namePlaceholder": "e.g. Staging hosts",
+          "scope": "Scope",
+          "username": "Target user",
+          "usernamePlaceholder": "root",
+          "uses": "Uses",
+          "maxUses": "Number of uses",
+          "lifetime": "Valid for",
+          "createEntries": "Create connections automatically",
+          "createEntriesHint": "Add each enrolled host to Nexterm as a connection.",
+          "folder": "Folder for new connections",
+          "noFolder": "No folder"
+        },
+        "useModes": {
+          "single": "Single use",
+          "limited": "Limited",
+          "unlimited": "Unlimited"
+        },
+        "lifetimes": {
+          "day": "1 day",
+          "week": "7 days",
+          "month": "30 days",
+          "never": "Never expires"
+        },
+        "actions": {
+          "create": "Create Token",
+          "copyAndClose": "Copy & Close",
+          "done": "Done"
         }
       }
     },

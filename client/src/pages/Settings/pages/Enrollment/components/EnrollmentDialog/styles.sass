@@ -1,0 +1,183 @@
+@use "@/common/styles/colors"
+@use "@/common/styles/breakpoints"
+
+.enrollment-dialog
+  display: flex
+  flex-direction: column
+  gap: 1.5rem
+  width: 28rem
+  user-select: none
+
+  &.result
+    width: 34rem
+
+    @media (max-width: breakpoints.$mobile)
+      width: 100%
+
+  @media (max-width: breakpoints.$mobile)
+    width: 100%
+
+  .dialog-title
+    display: flex
+    align-items: center
+    gap: 1rem
+
+    svg
+      width: 2rem
+      height: 2rem
+      color: colors.$primary
+      flex-shrink: 0
+
+    h2
+      margin: 0
+      font-size: 1.3rem
+      word-break: break-word
+
+  .dialog-content
+    display: flex
+    flex-direction: column
+    gap: 1rem
+
+    .form-group
+      display: flex
+      flex-direction: column
+      gap: 0.5rem
+
+      label
+        color: colors.$subtext
+        font-weight: 600
+        font-size: 0.9rem
+
+    .form-row
+      display: grid
+      grid-template-columns: 1fr 1fr
+      gap: 1rem
+
+      @media (max-width: breakpoints.$mobile)
+        grid-template-columns: 1fr
+
+    .form-toggle
+      display: flex
+      align-items: center
+      justify-content: space-between
+      gap: 1rem
+
+      .toggle-text
+        label
+          display: block
+          color: colors.$subtext
+          font-weight: 600
+          font-size: 0.9rem
+
+        p
+          margin: 0.25rem 0 0 0
+          color: colors.$subtext
+          opacity: 0.8
+          font-size: 0.8rem
+
+    .once-warning
+      display: flex
+      align-items: flex-start
+      gap: 0.625rem
+      background-color: colors.$warning-opacity
+      border: 1px solid colors.$warning
+      border-radius: 0.5rem
+      padding: 0.75rem
+
+      svg
+        color: colors.$warning
+        flex-shrink: 0
+        margin-top: 0.05rem
+
+      p
+        margin: 0
+        color: colors.$white
+        font-size: 0.85rem
+
+    .copy-field
+      display: flex
+      flex-direction: column
+      gap: 0.5rem
+
+      .copy-field-header
+        display: flex
+        align-items: center
+        justify-content: space-between
+        gap: 0.5rem
+
+        label
+          color: colors.$subtext
+          font-weight: 600
+          font-size: 0.9rem
+
+        .copy-btn
+          background-color: colors.$primary-opacity
+          border: none
+          border-radius: 0.5rem
+          padding: 0.375rem
+          cursor: pointer
+          color: colors.$primary
+          display: flex
+          align-items: center
+          justify-content: center
+          transition: background-color 0.1s ease
+
+          &:hover
+            background-color: colors.$gray
+
+          &.copied
+            background-color: colors.$success-opacity
+            color: colors.$success
+
+      .copy-value
+        margin: 0
+        background-color: colors.$terminal
+        border: 1px solid colors.$gray
+        border-radius: 0.5rem
+        padding: 0.875rem
+        color: colors.$white
+        font-family: monospace
+        font-size: 0.9rem
+        line-height: 1.45
+        white-space: pre-wrap
+        word-break: break-all
+        user-select: text
+        max-height: 10rem
+        overflow-y: auto
+
+        &.multiline
+          font-size: 0.8rem
+
+      .copy-hint
+        margin: 0
+        color: colors.$subtext
+        font-size: 0.8rem
+
+    .result-meta
+      display: flex
+      flex-wrap: wrap
+      gap: 0.375rem
+
+      span
+        display: inline-flex
+        align-items: center
+        gap: 0.3rem
+        background-color: colors.$dark-gray
+        color: colors.$subtext
+        padding: 0.25rem 0.625rem
+        border-radius: 0.75rem
+        font-size: 0.75rem
+        font-family: monospace
+        word-break: break-all
+        user-select: text
+
+  .dialog-actions
+    display: flex
+    justify-content: flex-end
+    gap: 1rem
+    margin-top: 1rem
+    padding-top: 1rem
+    border-top: 1px solid colors.$gray
+
+    @media (max-width: breakpoints.$mobile)
+      flex-direction: column-reverse

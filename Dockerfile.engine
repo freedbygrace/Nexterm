@@ -86,6 +86,12 @@ RUN apk add --no-cache \
     libpulse libvorbis libogg libssh2 \
     libvncserver freerdp-libs libcurl
 
+# Runtime library for libguac-client-spice. The plugin is only built when
+# spice-gtk was available to the builder, so a missing package here simply
+# leaves the image without SPICE support.
+RUN apk add --no-cache spice-gtk \
+    || echo "spice-gtk unavailable; SPICE support disabled"
+
 COPY scripts/install-browser-runtime.sh /tmp/install-browser-runtime.sh
 RUN sh /tmp/install-browser-runtime.sh && rm -f /tmp/install-browser-runtime.sh
 

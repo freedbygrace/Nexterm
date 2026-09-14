@@ -34,6 +34,12 @@ APK_ENGINE="
     pango-dev libwebp-dev
     pulseaudio-dev libvorbis-dev libogg-dev
 "
+# SPICE support is optional: the guacamole-server configure script falls
+# back to "not building spice" when these are missing.
+APK_SPICE="
+    spice-gtk-dev spice-protocol
+"
+
 APK_WEBVIEW="
     webkit2gtk-6.0-dev gtk4.0-dev
 "
@@ -55,6 +61,10 @@ APT_ENGINE="
     libpango1.0-dev libwebp-dev
     libpulse-dev libvorbis-dev libogg-dev
     file
+"
+
+APT_SPICE="
+    libspice-client-glib-2.0-dev libspice-protocol-dev
 "
 
 APT_WEBVIEW="
@@ -87,8 +97,25 @@ pkg_install() {
     fi
 }
 
+pkg_install_optional() {
+    if pkg_install "$1"; then
+        return 0
+    fi
+    echo "optional packages unavailable, continuing without them: $1" >&2
+    return 0
+}
+
+deps_spice() {
+    if [ "$PKG_MGR" = "apk" ]; then
+        pkg_install_optional "$APK_SPICE"
+    else
+        pkg_install_optional "$APT_SPICE"
+    fi
+}
+
 deps_guac() {
     if [ "$PKG_MGR" = "apk" ]; then pkg_install "$APK_GUAC"; else pkg_install "$APT_GUAC"; fi
+    deps_spice
 }
 
 deps_engine() {
@@ -151,6 +178,7 @@ build_guac() {
     ./configure \
         --prefix="$GUAC_DIST" \
         --with-freerdp-plugin-dir="$GUAC_DIST/lib/freerdp3" \
+        --with-spice \
         --disable-guacenc \
         --disable-guaclog \
         --without-libavcodec \
@@ -334,6 +362,7 @@ install_nfpm() {
 
 case "${1:-}" in
     deps-guac)   deps_guac ;;
+    deps-spice)  deps_spice ;;
     deps-engine) deps_engine ;;
     deps-webview) deps_webview ;;
     deps-libvnc) deps_libvnc ;;
@@ -347,7 +376,7 @@ case "${1:-}" in
     all)         deps_all; build_libvnc; build_guac; build_engine; package ;;
     all-with-pkg) deps_all; build_libvnc; build_guac; build_engine; package; install_nfpm; pkg ;;
     *)
-        echo "usage: $0 {deps-guac|deps-engine|deps-webview|deps-libvnc|deps-all|libvnc|guac|engine|package|pkg|install-nfpm|all|all-with-pkg}" >&2
+        echo "usage: $0 {deps-guac|deps-spice|deps-engine|deps-webview|deps-libvnc|deps-all|libvnc|guac|engine|package|pkg|install-nfpm|all|all-with-pkg}" >&2
         exit 1
         ;;
 esac

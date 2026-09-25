@@ -58,7 +58,8 @@ Linux/macOS script:
 2. creates `~/.ssh` with mode 700 and `authorized_keys` with mode 600 if they are missing,
 3. adds the public key **only if it is not already there**, comparing the key material rather than the whole
    line, so a hand-edited comment does not produce a duplicate,
-4. reports the hostname, address, OS and SSH port back to Nexterm.
+4. reports the hostname, address, OS and SSH port back to Nexterm - and the RDP port when Remote Desktop
+   is listening (xrdp on Linux, read from `/etc/xrdp/xrdp.ini`; on Windows when Remote Desktop is enabled).
 
 With the **certificate authority**, it instead:
 
@@ -77,8 +78,13 @@ written without a byte-order mark and with the ACL sshd insists on, the CA line 
 closes your PowerShell window. It needs the OpenSSH server installed
 (`Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0`) and an elevated prompt.
 
+The connection gets SSH and SFTP, plus RDP when it was found. SSH stays the default protocol: the enrollment
+key cannot log in over RDP, so Nexterm asks for Windows credentials the first time you connect with RDP
+(or attach an identity to RDP on the entry).
+
 Running any of them twice is safe. The second run says `already installed` / `already trusted` and updates
-the existing connection rather than creating a second one.
+the existing connection rather than creating a second one. Protocols you added to that connection by hand, its default protocol and per-protocol
+identities are kept; only what the script found is switched on or has its port updated.
 
 Nothing secret is sent back: the payload is a hostname, an address, an OS string and a port, and Nexterm
 rejects anything else.

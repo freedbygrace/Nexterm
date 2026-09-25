@@ -87,6 +87,18 @@
   &__row.enabled &__label
     color: colors.$white
 
+  &__tag
+    margin-left: 0.4rem
+    padding: 0.05rem 0.35rem
+    border-radius: 0.3rem
+    background-color: colors.$dark-gray
+    color: colors.$subtext
+    font-size: 0.65rem
+    font-weight: 600
+    text-transform: uppercase
+    letter-spacing: 0.03em
+    vertical-align: middle
+
   &__port
     width: 100%
     box-sizing: border-box
@@ -146,6 +158,10 @@
     &:disabled
       opacity: 0.4
       cursor: not-allowed
+
+  &__hint--note
+    border-top: 1px solid colors.$dark-gray
+    color: colors.$warning
 
   &__hint
     margin: 0

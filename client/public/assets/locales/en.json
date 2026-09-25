@@ -1855,7 +1855,8 @@
       },
       "engineOffline": "(offline)",
       "messages": {
-        "noProtocolEnabled": "Enable at least one protocol for this server"
+        "noProtocolEnabled": "Enable at least one protocol for this server",
+        "loadFailed": "Failed to load the server"
       },
       "protocols": {
         "defaultIdentity": "Entry default",
@@ -1863,7 +1864,10 @@
         "identity": "Identity",
         "noneEnabled": "Enable at least one protocol to connect to this host.",
         "port": "Port",
-        "primary": "Primary"
+        "primary": "Primary",
+        "direct": "direct",
+        "spiceDirectTooltip": "Connects straight to a SPICE server on this host (QEMU/libvirt). Proxmox VMs go through the Proxmox integration instead.",
+        "spiceProxmoxNote": "SPICE here connects straight to a SPICE server on this address (QEMU or libvirt with SPICE listening). For a Proxmox VM, add Proxmox as an integration and set the VM's console type to SPICE - that goes through Proxmox's SPICE proxy, not port 5900."
       },
       "settings": {
         "jumpHosts": {

@@ -103,7 +103,14 @@ export const ProtocolSelector = ({ config, setConfig, identityOptions = [] }) =>
                         <div className="protocol-selector__column protocol-selector__column--name">
                             <Checkbox id={checkboxId} size="small" checked={enabled}
                                       onChange={(checked) => toggleProtocol(protocol, checked)} />
-                            <label htmlFor={checkboxId} className="protocol-selector__label">{label}</label>
+                            <label htmlFor={checkboxId} className="protocol-selector__label"
+                                   title={protocol === "spice" ? t("servers.dialog.protocols.spiceDirectTooltip") : undefined}>
+                                {label}
+                                {/* Not the Proxmox route: that is the console type of a Proxmox VM entry. */}
+                                {protocol === "spice" && (
+                                    <span className="protocol-selector__tag">{t("servers.dialog.protocols.direct")}</span>
+                                )}
+                            </label>
                         </div>
 
                         {showIdentityColumn && (
@@ -144,6 +151,12 @@ export const ProtocolSelector = ({ config, setConfig, identityOptions = [] }) =>
                     ? t("servers.dialog.protocols.noneEnabled")
                     : t("servers.dialog.protocols.hint")}
             </p>
+
+            {enabledProtocols.includes("spice") && (
+                <p className="protocol-selector__hint protocol-selector__hint--note">
+                    {t("servers.dialog.protocols.spiceProxmoxNote")}
+                </p>
+            )}
         </div>
     );
 };

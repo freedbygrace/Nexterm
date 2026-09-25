@@ -1,5 +1,6 @@
 @use "@/common/styles/colors"
 @use "@/common/styles/breakpoints"
+@use "@/common/styles/scale"
 
 .server-tabs-reveal-zone
   position: absolute
@@ -11,7 +12,7 @@
 
 .server-tabs
   display: flex
-  padding: 0.3rem .5rem 0 .5rem
+  padding: scale.tabs(0.3rem) scale.tabs(0.5rem) 0 scale.tabs(0.5rem)
   gap: 0rem
   align-items: center
   user-select: none
@@ -24,7 +25,7 @@
     left: 0
     right: 0
     z-index: 1002
-    padding-bottom: 0.3rem
+    padding-bottom: scale.tabs(0.3rem)
     background-color: colors.$background
     border-bottom: 1px solid colors.$dark-gray
     box-shadow: colors.$shadow-lg
@@ -37,52 +38,52 @@
       opacity: 1
 
   @media (max-width: breakpoints.$tablet)
-    padding: 0.5rem 0.75rem 0 0.75rem
-    gap: 0.5rem
+    padding: scale.tabs(0.5rem) scale.tabs(0.75rem) 0 scale.tabs(0.75rem)
+    gap: scale.tabs(0.5rem)
 
   @media (max-width: breakpoints.$mobile)
-    padding: 0.5rem 0.5rem 0 0.5rem
-    gap: 0.25rem
+    padding: scale.tabs(0.5rem) scale.tabs(0.5rem) 0 scale.tabs(0.5rem)
+    gap: scale.tabs(0.25rem)
 
   svg
-    width: 2rem
-    height: 2rem
+    width: scale.tabs(2rem)
+    height: scale.tabs(2rem)
 
     @media (max-width: breakpoints.$mobile)
-      width: 1.5rem
-      height: 1.5rem
+      width: scale.tabs(1.5rem)
+      height: scale.tabs(1.5rem)
 
   .layout-controls
     display: flex
-    gap: 0.3rem
+    gap: scale.tabs(0.3rem)
     align-items: center
-    margin-right: 1rem
-    padding-right: 1rem
+    margin-right: scale.tabs(1rem)
+    padding-right: scale.tabs(1rem)
     border-right: 1px solid colors.$gray
 
     @media (max-width: breakpoints.$tablet)
-      margin-right: 0.5rem
-      padding-right: 0.5rem
+      margin-right: scale.tabs(0.5rem)
+      padding-right: scale.tabs(0.5rem)
 
     @media (max-width: breakpoints.$mobile)
       margin-right: 0
       padding-right: 0
       border-right: none
-      gap: 0.1rem
+      gap: scale.tabs(0.1rem)
 
     .layout-btn
       cursor: pointer
-      padding: 0.35rem
-      border-radius: 8px
+      padding: scale.tabs(0.35rem)
+      border-radius: scale.tabs(0.5rem)
       transition: all 0.2s ease
       color: colors.$subtext
-      width: 1.6rem
-      height: 1.6rem
+      width: scale.tabs(1.6rem)
+      height: scale.tabs(1.6rem)
 
       @media (max-width: breakpoints.$mobile)
-        width: 1.4rem
-        height: 1.4rem
-        padding: 0.3rem
+        width: scale.tabs(1.4rem)
+        height: scale.tabs(1.4rem)
+        padding: scale.tabs(0.3rem)
 
         &.split-btn, &.fullscreen-btn
           display: none
@@ -106,7 +107,7 @@
       position: absolute
       top: 0
       bottom: 0
-      width: 3rem
+      width: scale.tabs(3rem)
       display: flex
       align-items: center
       justify-content: center
@@ -115,7 +116,7 @@
       pointer-events: none
 
       @media (max-width: breakpoints.$mobile)
-        width: 2rem
+        width: scale.tabs(2rem)
 
       &.left
         left: 0
@@ -136,17 +137,17 @@
         pointer-events: auto
 
       svg
-        width: 2rem
-        height: 2rem
+        width: scale.tabs(2rem)
+        height: scale.tabs(2rem)
         color: colors.$subtext
         transition: all 0.2s ease
-        padding: 0.5rem
+        padding: scale.tabs(0.5rem)
         border-radius: 4px
 
         @media (max-width: breakpoints.$mobile)
-          width: 1.5rem
-          height: 1.5rem
-          padding: 0.25rem
+          width: scale.tabs(1.5rem)
+          height: scale.tabs(1.5rem)
+          padding: scale.tabs(0.25rem)
 
       button:hover svg
         background-color: colors.$gray
@@ -154,7 +155,7 @@
 
   .tabs
     display: flex
-    gap: 0.5rem
+    gap: scale.tabs(0.5rem)
     flex: 1
     overflow-x: auto
     overflow-y: hidden
@@ -163,17 +164,17 @@
     -webkit-overflow-scrolling: touch
 
     @media (max-width: breakpoints.$mobile)
-      gap: 0.25rem
+      gap: scale.tabs(0.25rem)
 
     &::-webkit-scrollbar
       display: none
 
     .server-tab
       display: flex
-      gap: 0.5rem
-      padding: 0.25rem 0.5rem
+      gap: scale.tabs(0.5rem)
+      padding: scale.tabs(0.25rem) scale.tabs(0.5rem)
       align-items: center
-      border-radius: 0.5rem 0.5rem 0 0
+      border-radius: scale.tabs(0.5rem) scale.tabs(0.5rem) 0 0
       border-bottom: 2px solid transparent
       cursor: pointer
       user-select: none
@@ -183,12 +184,12 @@
       transition: all 0.2s ease
 
       @media (max-width: breakpoints.$tablet)
-        padding: 0.5rem 0.75rem
-        gap: 0.375rem
+        padding: scale.tabs(0.5rem) scale.tabs(0.75rem)
+        gap: scale.tabs(0.375rem)
 
       @media (max-width: breakpoints.$mobile)
-        padding: 0.375rem 0.5rem
-        gap: 0.25rem
+        padding: scale.tabs(0.375rem) scale.tabs(0.5rem)
+        gap: scale.tabs(0.25rem)
 
       &:hover
         background-color: colors.$gray
@@ -217,69 +218,69 @@
         display: inline-flex
         align-items: center
         justify-content: center
-        min-width: 1.1rem
-        height: 1.1rem
-        padding: 0 0.3rem
-        margin-left: 0.4rem
-        border-radius: 0.6rem
+        min-width: scale.tabs(1.1rem)
+        height: scale.tabs(1.1rem)
+        padding: 0 scale.tabs(0.3rem)
+        margin-left: scale.tabs(0.4rem)
+        border-radius: scale.tabs(0.6rem)
         background-color: colors.$primary-opacity
         color: colors.$primary
-        font-size: 0.75rem
+        font-size: scale.tabs(0.75rem)
         font-weight: 600
 
       .group-name-input
         flex: 1
         min-width: 0
-        font-size: 1.1rem
+        font-size: scale.tabs(1.1rem)
         font-family: inherit
         color: inherit
         background-color: colors.$primary-opacity
         border: 1px solid colors.$primary
         border-radius: 0.25rem
-        padding: 0.1rem 0.3rem
+        padding: scale.tabs(0.1rem) scale.tabs(0.3rem)
         outline: none
 
       svg
-        width: 1.2rem
-        height: 1.2rem
+        width: scale.tabs(1.2rem)
+        height: scale.tabs(1.2rem)
         flex-shrink: 0
 
         @media (max-width: breakpoints.$mobile)
-          width: 1rem
-          height: 1rem
+          width: scale.tabs(1rem)
+          height: scale.tabs(1rem)
 
       .progress-circle
         position: relative
-        width: 36px
-        height: 36px
+        width: scale.tabs(2.25rem)
+        height: scale.tabs(2.25rem)
         flex-shrink: 0
         display: flex
         align-items: center
         justify-content: center
 
         @media (max-width: breakpoints.$mobile)
-          width: 28px
-          height: 28px
+          width: scale.tabs(1.75rem)
+          height: scale.tabs(1.75rem)
 
         &.no-progress
           .progress-icon
-            width: 1.5rem
-            height: 1.5rem
+            width: scale.tabs(1.5rem)
+            height: scale.tabs(1.5rem)
 
             @media (max-width: breakpoints.$mobile)
-              width: 1.25rem
-              height: 1.25rem
+              width: scale.tabs(1.25rem)
+              height: scale.tabs(1.25rem)
 
         svg
-          width: 36px
-          height: 36px
+          width: scale.tabs(2.25rem)
+          height: scale.tabs(2.25rem)
           position: absolute
           top: 0
           left: 0
 
           @media (max-width: breakpoints.$mobile)
-            width: 28px
-            height: 28px
+            width: scale.tabs(1.75rem)
+            height: scale.tabs(1.75rem)
 
           .progress-bg
             opacity: 0.15
@@ -290,19 +291,19 @@
             transition: stroke-dashoffset 0.1s linear
 
         .progress-icon
-          width: 1rem
-          height: 1rem
+          width: scale.tabs(1rem)
+          height: scale.tabs(1rem)
           position: relative
           z-index: 1
           transition: all 0.2s ease
 
           @media (max-width: breakpoints.$mobile)
-            width: 0.875rem
-            height: 0.875rem
+            width: scale.tabs(0.875rem)
+            height: scale.tabs(0.875rem)
 
       h2
         margin: 0
-        font-size: 1.15rem
+        font-size: scale.tabs(1.15rem)
         flex: 1
         min-width: 0
         white-space: nowrap
@@ -310,29 +311,29 @@
         text-overflow: ellipsis
 
         @media (max-width: breakpoints.$tablet)
-          font-size: 1.1rem
+          font-size: scale.tabs(1.1rem)
 
         @media (max-width: breakpoints.$mobile)
-          font-size: 0.9rem
-          max-width: 100px
+          font-size: scale.tabs(0.9rem)
+          max-width: scale.tabs(6.25rem)
 
       .tab-participants
-        margin-right: 0.25rem
+        margin-right: scale.tabs(0.25rem)
 
       .tab-actions
         display: flex
         align-items: center
-        gap: 0.25rem
+        gap: scale.tabs(0.25rem)
         cursor: pointer
 
         .close-btn
           opacity: 0.6
           transition: all 0.2s ease
-          padding: 0.25rem
+          padding: scale.tabs(0.25rem)
           border-radius: 0.25rem
 
           @media (max-width: breakpoints.$mobile)
-            padding: 0.125rem
+            padding: scale.tabs(0.125rem)
 
           &:hover
             opacity: 1
@@ -350,17 +351,17 @@
   flex: 1
   min-width: 0
   max-width: 100%
-  padding: 0 0.5rem
+  padding: 0 scale.tabs(0.5rem)
   border-left: 1px solid colors.$dark-gray
 
   .layout-controls
-    margin-right: 0.5rem
-    padding-right: 0.5rem
+    margin-right: scale.tabs(0.5rem)
+    padding-right: scale.tabs(0.5rem)
 
     .layout-btn
-      width: 1.45rem
-      height: 1.45rem
-      padding: 0.25rem
+      width: scale.tabs(1.45rem)
+      height: scale.tabs(1.45rem)
+      padding: scale.tabs(0.25rem)
 
   .tabs-container .scroll-indicator
     &.left
@@ -370,33 +371,33 @@
       background: linear-gradient(to left, colors.$lighter-background 50%, transparent)
 
   .tabs
-    gap: 0.3rem
+    gap: scale.tabs(0.3rem)
 
     .server-tab
-      padding: 0.2rem 0.55rem
-      gap: 0.4rem
+      padding: scale.tabs(0.2rem) scale.tabs(0.55rem)
+      gap: scale.tabs(0.4rem)
 
       svg
-        width: 1.05rem
-        height: 1.05rem
+        width: scale.tabs(1.05rem)
+        height: scale.tabs(1.05rem)
 
       h2
-        font-size: 0.9rem
+        font-size: scale.tabs(0.9rem)
 
       .tab-actions .close-btn
-        padding: 0.2rem
+        padding: scale.tabs(0.2rem)
 
       .progress-circle
-        width: 24px
-        height: 24px
+        width: scale.tabs(1.5rem)
+        height: scale.tabs(1.5rem)
 
         svg
-          width: 24px
-          height: 24px
+          width: scale.tabs(1.5rem)
+          height: scale.tabs(1.5rem)
 
         &.no-progress .progress-icon
-          width: 1.05rem
-          height: 1.05rem
+          width: scale.tabs(1.05rem)
+          height: scale.tabs(1.05rem)
 
 .progress-icon.page-favicon
   object-fit: contain

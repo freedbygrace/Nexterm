@@ -1,0 +1,9 @@
+// Size helpers for the parts of the UI that have their own size preference (Settings -> Appearance).
+// PreferencesContext sets the custom properties on :root; values are multipliers on top of the
+// global interface size, which already scales everything rem-based through the root font-size.
+
+@function server-list($value)
+  @return calc($value * var(--server-list-scale, 1))
+
+@function tabs($value)
+  @return calc($value * var(--tabs-scale, 1))

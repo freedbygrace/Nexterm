@@ -23,15 +23,15 @@ export const Appearance = () => {
     const { user, login } = useContext(UserContext);
     const {
         themeMode, setTheme, accentColor, setAccentColor, accentColors,
-        uiScale, setUiScale, isGroupSynced, toggleGroupSync, theme: actualTheme,
+        uiScale, setUiScale, serverListScale, setServerListScale, tabsScale, setTabsScale, sizeScales,
+        isGroupSynced, toggleGroupSync, theme: actualTheme,
     } = usePreferences();
 
-    const sizeOptions = [
-        { label: t("settings.account.sizeXS"), value: 0.7 },
-        { label: t("settings.account.sizeS"), value: 0.85 },
-        { label: t("settings.account.sizeM"), value: 1 },
-        { label: t("settings.account.sizeL"), value: 1.15 },
-        { label: t("settings.account.sizeXL"), value: 1.3 },
+    const sizeOptions = sizeScales.map(value => ({ label: `${Math.round(value * 100)}%`, value }));
+    const sizeSettings = [
+        { key: "interface", label: t("settings.account.sizeLabel"), description: t("settings.account.sizeDescription"), value: uiScale, setValue: setUiScale },
+        { key: "serverList", label: t("settings.account.serverListSizeLabel"), description: t("settings.account.serverListSizeDescription"), value: serverListScale, setValue: setServerListScale },
+        { key: "tabs", label: t("settings.account.tabsSizeLabel"), description: t("settings.account.tabsSizeDescription"), value: tabsScale, setValue: setTabsScale },
     ];
     const { sendToast } = useToast();
 
@@ -227,11 +227,16 @@ export const Appearance = () => {
                                 ))}
                             </div>
                         </div>
-                        <div className="size-selector">
-                            <span className="size-label">{t("settings.account.sizeLabel")}</span>
-                            <SelectBox options={sizeOptions} selected={uiScale} setSelected={setUiScale} />
-                        </div>
                     </div>
+                </div>
+                <div className="section-inner size-settings">
+                    {sizeSettings.map(setting => (
+                        <div key={setting.key} className="size-selector">
+                            <span className="size-label">{setting.label}</span>
+                            <p className="size-description">{setting.description}</p>
+                            <SelectBox options={sizeOptions} selected={setting.value} setSelected={setting.setValue} />
+                        </div>
+                    ))}
                 </div>
             </div>
 

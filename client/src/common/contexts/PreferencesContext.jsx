@@ -16,6 +16,7 @@ const PATH_TO_GROUP = {
     "terminal.autoReconnect": "terminal.input",
     "terminal.theme": "terminal.theme",
     "theme.mode": "appearance", "theme.accentColor": "appearance", "theme.uiScale": "appearance",
+    "theme.serverListScale": "appearance", "theme.tabsScale": "appearance",
     "files.showThumbnails": "files", "files.defaultViewMode": "files", "files.showHiddenFiles": "files",
     "files.confirmBeforeDelete": "files", "files.dragDropAction": "files",
     "general.language": "general",
@@ -327,6 +328,15 @@ const CURSOR_STYLES = [
     { name: "Bar", value: "bar" },
 ];
 
+// Size multipliers offered in Settings -> Appearance; the server accepts 0.7-1.3. 0.7/0.85/1.15/1.3
+// were the original XS/S/L/XL interface sizes, kept so stored choices still match an option.
+const SIZE_SCALES = [0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1, 1.1, 1.15, 1.25, 1.3];
+
+const toScale = (value) => {
+    const n = Number(value);
+    return Number.isFinite(n) && n >= 0.7 && n <= 1.3 ? n : 1;
+};
+
 const ACCENT_COLORS = [
     { name: "Blue", value: "#314BD3" },
     { name: "Purple", value: "#7C3AED" },
@@ -427,7 +437,9 @@ export const PreferencesProvider = ({ children, user, refreshUser }) => {
 
     const themeMode = get("theme.mode", "auto");
     const accentColor = get("theme.accentColor", "#314BD3");
-    const uiScale = Number(get("theme.uiScale", 1) ?? 1) || 1;
+    const uiScale = toScale(get("theme.uiScale", 1));
+    const serverListScale = toScale(get("theme.serverListScale", 1));
+    const tabsScale = toScale(get("theme.tabsScale", 1));
     const actualTheme = themeMode === "auto" ? getSystemTheme() : themeMode;
 
     useEffect(() => {
@@ -453,10 +465,15 @@ export const PreferencesProvider = ({ children, user, refreshUser }) => {
         document.documentElement.style.setProperty("--accent-color", accentColor);
     }, [accentColor]);
 
+    // The interface size drives the root font-size (see main.sass), so everything sized in rem follows it.
+    // The server list and tab sizes multiply on top of it through the helpers in styles/_scale.sass.
+    // xterm and the remote-desktop canvas size themselves in pixels, so none of these touch them.
     useEffect(() => {
-        const normalizedScale = typeof uiScale === "number" ? uiScale : Number(uiScale) || 1;
-        document.documentElement.style.setProperty("--ui-scale", normalizedScale.toString());
-    }, [uiScale]);
+        const rootStyle = document.documentElement.style;
+        rootStyle.setProperty("--ui-scale", uiScale.toString());
+        rootStyle.setProperty("--server-list-scale", serverListScale.toString());
+        rootStyle.setProperty("--tabs-scale", tabsScale.toString());
+    }, [uiScale, serverListScale, tabsScale]);
 
     const selectedTheme = get("terminal.theme", "default");
     const selectedFont = get("terminal.fontFamily", "monospace");
@@ -490,7 +507,9 @@ export const PreferencesProvider = ({ children, user, refreshUser }) => {
 
     const setTheme = useCallback((mode) => set("theme.mode", mode), [set]);
     const setAccentColor = useCallback((color) => set("theme.accentColor", color), [set]);
-    const setUiScale = useCallback((scale) => set("theme.uiScale", Number(scale) || 1), [set]);
+    const setUiScale = useCallback((scale) => set("theme.uiScale", toScale(scale)), [set]);
+    const setServerListScale = useCallback((scale) => set("theme.serverListScale", toScale(scale)), [set]);
+    const setTabsScale = useCallback((scale) => set("theme.tabsScale", toScale(scale)), [set]);
     const toggleTheme = useCallback(() => {
         setTheme(themeMode === "auto" || themeMode === "dark" ? "light" : "dark");
     }, [setTheme, themeMode]);
@@ -533,7 +552,7 @@ export const PreferencesProvider = ({ children, user, refreshUser }) => {
             get, set, isLoading, preferences: prefs,
             isGroupSynced, enableGroupSync, disableGroupSync, toggleGroupSync,
             theme: actualTheme, themeMode, setTheme, toggleTheme, accentColor, setAccentColor, accentColors: ACCENT_COLORS,
-            uiScale, setUiScale,
+            uiScale, setUiScale, serverListScale, setServerListScale, tabsScale, setTabsScale, sizeScales: SIZE_SCALES,
             selectedTheme, setSelectedTheme, selectedFont, setSelectedFont, fontSize, setFontSize,
             cursorStyle, setCursorStyle, cursorBlink, setCursorBlink,
             smartCopyPaste, setSmartCopyPaste,

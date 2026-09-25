@@ -113,9 +113,9 @@ export const FolderObject = ({ id, name, nestedLevel, position, onClick, isOpen,
              role="button" tabIndex={0}
              onKeyDown={(e) => { if (!renameState && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); onClick?.(e); } }}
              ref={(node) => { elementRef.current = node; dragRef(dropRef(node)); }} onClick={renameState ? (e) => e.stopPropagation() : onClick}
-             style={{ paddingLeft: `${10 + (nestedLevel * 15)}px`, opacity }}>
+             style={{ paddingLeft: `calc(${(10 + (nestedLevel * 15)) / 16}rem * var(--server-list-scale, 1))`, opacity }}>
             {(folderType === 'integration-node' || folderType === 'integration-root') ? (
-                <img src={ProxmoxIcon} alt="Proxmox" style={{ width: '1.5rem', height: '1.5rem' }} />
+                <img src={ProxmoxIcon} alt="Proxmox" className="folder-image" />
             ) : (
                 <Icon path={isOpen ? mdiFolderOpenOutline : mdiFolderOutline} />
             )}

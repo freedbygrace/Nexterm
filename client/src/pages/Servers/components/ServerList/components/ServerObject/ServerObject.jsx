@@ -158,7 +158,7 @@ export const ServerObject = ({ id, name, position, folderId, organizationId, nes
     return (
         <div 
             className={"server-object"}
-            style={{ paddingLeft: `${15 + (nestedLevel * 15)}px`, opacity, position: 'relative' }} 
+            style={{ paddingLeft: `calc(${(15 + (nestedLevel * 15)) / 16}rem * var(--server-list-scale, 1))`, opacity, position: 'relative' }} 
             data-id={id}
             ref={(node) => {
                 elementRef.current = node;

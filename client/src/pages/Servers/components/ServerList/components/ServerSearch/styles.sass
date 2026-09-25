@@ -1,5 +1,6 @@
 @use "@/common/styles/colors"
 @use "@/common/styles/breakpoints"
+@use "@/common/styles/scale"
 
 .server-search
   position: relative
@@ -13,17 +14,17 @@
 .search-icon
   position: absolute
   top: 50%
-  left: 0.65rem
-  width: 1.7rem
-  height: 1.7rem
+  left: scale.server-list(0.65rem)
+  width: scale.server-list(1.7rem)
+  height: scale.server-list(1.7rem)
   transform: translateY(-50%)
   color: colors.$subtext
   transition: opacity 0.2s
 
   @media (max-width: breakpoints.$mobile)
-    width: 1.275rem
-    height: 1.275rem
-    left: 0.55rem
+    width: scale.server-list(1.275rem)
+    height: scale.server-list(1.275rem)
+    left: scale.server-list(0.55rem)
 
   @container (max-width: 180px)
     opacity: 0
@@ -32,7 +33,7 @@
 .info-container
   position: absolute
   top: 50%
-  right: 0.65rem
+  right: scale.server-list(0.65rem)
   transform: translateY(-50%)
   user-select: none
   cursor: pointer
@@ -40,7 +41,7 @@
   transition: opacity 0.2s
 
   @media (max-width: breakpoints.$mobile)
-    right: 0.425rem
+    right: scale.server-list(0.425rem)
 
   @container (max-width: 180px)
     opacity: 0
@@ -48,38 +49,38 @@
 
   p
     margin: 0
-    padding: 0.175rem 0.425rem
-    border-radius: 0.5rem
-    font-size: 9pt
+    padding: scale.server-list(0.175rem) scale.server-list(0.425rem)
+    border-radius: scale.server-list(0.5rem)
+    font-size: scale.server-list(0.75rem)
     border: 1px solid colors.$gray
 
     @media (max-width: breakpoints.$mobile)
-      font-size: 8pt
-      padding: 0.125rem 0.34rem
+      font-size: scale.server-list(0.667rem)
+      padding: scale.server-list(0.125rem) scale.server-list(0.34rem)
 
 .search-input
   user-select: none
-  padding: 0.68rem 5.1rem 0.68rem 2.975rem
+  padding: scale.server-list(0.68rem) scale.server-list(5.1rem) scale.server-list(0.68rem) scale.server-list(2.975rem)
   border: 1px solid colors.$gray
   background-color: colors.$lighter-background
   color: colors.$white
   box-sizing: border-box
-  border-radius: 0.7rem
-  font-size: 12pt
+  border-radius: scale.server-list(0.7rem)
+  font-size: scale.server-list(1rem)
   height: var(--search-control-size)
   width: 100%
   outline: none
   transition: border-color 0.2s ease
 
   @media (max-width: breakpoints.$mobile)
-    padding: 0.6rem 4.25rem 0.6rem 2.35rem
-    font-size: 11pt
+    padding: scale.server-list(0.6rem) scale.server-list(4.25rem) scale.server-list(0.6rem) scale.server-list(2.35rem)
+    font-size: scale.server-list(0.917rem)
 
   @container (max-width: 180px)
-    padding-right: 1rem
+    padding-right: scale.server-list(1rem)
 
   @container (max-width: 180px)
-    padding-left: 1rem
+    padding-left: scale.server-list(1rem)
 
   &:focus
     border: 1px solid colors.$primary

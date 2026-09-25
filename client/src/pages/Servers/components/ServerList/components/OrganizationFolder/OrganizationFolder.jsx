@@ -54,7 +54,7 @@ const OrganizationFolder = ({ id, name, entries, nestedLevel, connectToServer, c
     return (
         <>
             <div className={"folder-object" + (isOver ? " folder-is-over" : "")} onClick={toggleFolder} data-id={id}
-                 style={{ paddingLeft: `${10 + (nestedLevel * 15)}px` }}
+                 style={{ paddingLeft: `calc(${(10 + (nestedLevel * 15)) / 16}rem * var(--server-list-scale, 1))` }}
                  ref={dropRef}>
                 <Icon path={isOpen ? mdiDomain : mdiDomainOff} />
                 <p className="truncate-text">{name}</p>

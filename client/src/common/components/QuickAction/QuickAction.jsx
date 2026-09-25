@@ -9,6 +9,7 @@ import { ServerContext } from "@/common/contexts/ServerContext.jsx";
 import { SnippetContext } from "@/common/contexts/SnippetContext.jsx";
 import { UserContext } from "@/common/contexts/UserContext.jsx";
 import { getSidebarNavigation, getAllSettingsPages } from "@/common/utils/navigationConfig.jsx";
+import { MODAL_LAYER } from "@/common/utils/layers.js";
 import "./styles.sass";
 
 export const QuickAction = ({ isOpen, onClose }) => {
@@ -72,7 +73,7 @@ export const QuickAction = ({ isOpen, onClose }) => {
     if (!isVisible) return null;
 
     return createPortal(
-        <div className={`quick-action-overlay ${isClosing ? 'closing' : ''}`}>
+        <div className={`quick-action-overlay ${isClosing ? 'closing' : ''}`} {...MODAL_LAYER}>
             <div ref={containerRef} className={`quick-action-container ${isClosing ? 'closing' : ''}`} onAnimationEnd={() => isClosing && (setIsVisible(false), setIsClosing(false))}>
                 <div className="quick-action-search">
                     <input ref={inputRef} type="text" placeholder={t("common.quickAction.placeholder")} value={searchQuery} onChange={event => setSearchQuery(event.target.value)} autoComplete="off" spellCheck="false" />

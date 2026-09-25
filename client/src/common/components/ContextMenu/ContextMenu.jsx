@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { POPOVER_LAYER } from "@/common/utils/layers.js";
 import "./styles.sass";
 
 export const ContextMenu = ({ 
@@ -108,6 +109,7 @@ export const ContextMenu = ({
             role="menu"
             aria-orientation="vertical"
             tabIndex={-1}
+            {...POPOVER_LAYER}
             onTransitionEnd={handleAnimationEnd}
         >
             {processChildren(children)}

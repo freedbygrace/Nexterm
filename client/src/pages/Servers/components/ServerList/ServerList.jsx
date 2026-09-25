@@ -7,6 +7,7 @@ import { useLiveSessions } from "@/common/contexts/LiveSessionContext.jsx";
 import { getSessionOwnerLabel } from "@/common/utils/avatar.js";
 import { IdentityContext } from "@/common/contexts/IdentityContext.jsx";
 import { useScripts } from "@/common/contexts/ScriptContext.jsx";
+import { isInPopoverLayer, isInModalLayer } from "@/common/utils/layers.js";
 import ServerEntries from "./components/ServerEntries.jsx";
 import { isCredentiallessProtocol } from "@/common/utils/ConnectionUtil.js";
 import { getServerProtocols, getPrimaryProtocol, hasProtocol, PROTOCOL_LABELS, FILE_PROTOCOLS, getProtocolIcon } from "@/common/utils/ProtocolUtil.js";
@@ -165,7 +166,9 @@ export const ServerList = ({
     useEffect(() => {
         if (!isMobile || !mobileOpen) return;
         const handleClickOutside = (e) => {
-            if (serverListRef.current && !serverListRef.current.contains(e.target) && 
+            // Context menus and dialogs opened from the list are portaled outside it
+            if (isInPopoverLayer(e.target) || isInModalLayer(e.target)) return;
+            if (serverListRef.current && !serverListRef.current.contains(e.target) &&
                 !e.target.closest('.server-list-toggle') &&
                 !e.target.closest('.mobile-nav')) {
                 setMobileOpen?.(false);

@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import Icon from "@mdi/react";
 import { mdiClose } from "@mdi/js";
+import { MODAL_LAYER, isInPopoverLayer, isTopmostModal } from "@/common/utils/layers.js";
 import "./styles.sass";
 
 export const DialogContext = createContext({});
@@ -105,32 +106,36 @@ export const DialogProvider = ({ disableClosing, open, children, onClose, isDirt
     // ----------------------------------------------------- //
 
     useEffect(() => {
+        if (!isVisible) return;
+
         const handleClick = (event) => {
+            // A modal opened on top of this one (nested dialog, confirm dialog, ...) owns the click
+            if (!isTopmostModal(areaRef.current)) return;
+
             if (showConfirm) {
                 if (!confirmRef.current?.contains(event.target)) {
                     setShowConfirm(false);
                 }
                 return;
             }
-            
-            const isInsideDialog = ref.current?.contains(event.target);
-            const isInsidePortal = !!document.getElementById('select-box-portal')?.contains(event.target)
-                || !!event.target.closest('.icon-chooser__dropdown');
-            
-            if (!isInsideDialog && !isInsidePortal) {
-                tryClose();
-            }
+
+            // Dropdowns, menus etc. are portaled to <body>, so they are outside the dialog in the DOM
+            if (ref.current?.contains(event.target) || isInPopoverLayer(event.target)) return;
+
+            tryClose();
         };
 
         document.addEventListener("mousedown", handleClick);
         return () => document.removeEventListener("mousedown", handleClick);
-    }, [ref, tryClose, showConfirm]);
+    }, [isVisible, tryClose, showConfirm]);
 
     useEffect(() => {
         if (!open || disableClosing) return;
 
         const handleKeyDown = (event) => {
             if (event.key === 'Escape') {
+                // Only the topmost modal reacts, so Escape in a nested dialog doesn't close its parent too
+                if (!isTopmostModal(areaRef.current)) return;
                 event.preventDefault();
                 if (showConfirm) {
                     setShowConfirm(false);
@@ -163,7 +168,8 @@ export const DialogProvider = ({ disableClosing, open, children, onClose, isDirt
     };
 
     const dialogContent = isVisible ? (
-        <dialog className={`dialog-area ${isClosing ? "dialog-area-hidden" : ""}`} ref={areaRef} onKeyDown={handleKeyDownTrap} open={isVisible}>
+        <dialog className={`dialog-area ${isClosing ? "dialog-area-hidden" : ""}`} ref={areaRef} onKeyDown={handleKeyDownTrap}
+            open={isVisible} {...MODAL_LAYER}>
             <div className={`dialog ${isClosing ? "dialog-hidden" : ""}`} ref={ref}
                 onAnimationEnd={handleAnimationEnd}>
                 {!disableClosing && (

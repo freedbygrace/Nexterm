@@ -1,11 +1,12 @@
 import { createPortal } from "react-dom";
-import { useContext, useState, useEffect, useCallback, useMemo } from "react";
+import { useContext, useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import Icon from "@mdi/react";
 import { mdiClose, mdiLogout } from "@mdi/js";
 import { UserContext } from "@/common/contexts/UserContext.jsx";
 import { ActionConfirmDialog } from "@/common/components/ActionConfirmDialog/ActionConfirmDialog.jsx";
 import { getSettingsUserPages, getSettingsAdminPages } from "@/common/utils/navigationConfig.jsx";
+import { MODAL_LAYER, isTopmostModal } from "@/common/utils/layers.js";
 import "./styles.sass";
 
 export const SettingsDialog = ({ open, onClose, initialTab = "account" }) => {
@@ -15,6 +16,7 @@ export const SettingsDialog = ({ open, onClose, initialTab = "account" }) => {
     const [isVisible, setIsVisible] = useState(false);
     const [isClosing, setIsClosing] = useState(false);
     const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
+    const overlayRef = useRef(null);
 
     const userPages = useMemo(() => getSettingsUserPages(t), [t]);
     const adminPages = useMemo(
@@ -37,7 +39,8 @@ export const SettingsDialog = ({ open, onClose, initialTab = "account" }) => {
     useEffect(() => {
         if (!open) return;
         const onKey = (e) => {
-            if (e.key === "Escape") {
+            // Leave Escape to a dialog opened on top of settings (e.g. a create/edit dialog)
+            if (e.key === "Escape" && isTopmostModal(overlayRef.current)) {
                 e.preventDefault();
                 handleClose();
             }
@@ -69,7 +72,7 @@ export const SettingsDialog = ({ open, onClose, initialTab = "account" }) => {
             <ActionConfirmDialog open={logoutDialogOpen} setOpen={setLogoutDialogOpen}
                                  text={t("common.sidebar.logoutConfirmText", { username: user?.username })}
                                  onConfirm={logout} />
-            <div className={`settings-dialog-overlay ${isClosing ? "closing" : ""}`}
+            <div className={`settings-dialog-overlay ${isClosing ? "closing" : ""}`} ref={overlayRef} {...MODAL_LAYER}
                  onAnimationEnd={handleAnimationEnd}>
                 <div className="settings-dialog">
                     <div className="settings-dialog-sidebar">

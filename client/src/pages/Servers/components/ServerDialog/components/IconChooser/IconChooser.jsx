@@ -4,6 +4,7 @@ import * as mdi from "@mdi/js";
 import Icon from "@mdi/react";
 import { mdiMagnify, mdiClose, mdiChevronDown } from "@mdi/js";
 import { useTranslation } from "react-i18next";
+import { POPOVER_LAYER } from "@/common/utils/layers.js";
 import "./styles.sass";
 
 const getAllIcons = () => {
@@ -131,6 +132,7 @@ export const IconChooser = ({ selected, setSelected }) => {
                     ref={dropdownRef}
                     className={`icon-chooser__dropdown ${isPositioned ? "open" : ""}`}
                     style={{ top: position.top, left: position.left, minWidth: position.width }}
+                    {...POPOVER_LAYER}
                     onClick={(e) => e.stopPropagation()}
                 >
                     <div className="icon-chooser__search">

@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import Icon from "@mdi/react";
 import { mdiMagnify, mdiClose } from "@mdi/js";
 import { getRequest } from "@/common/utils/RequestUtil.js";
+import { POPOVER_LAYER } from "@/common/utils/layers.js";
 import { useTranslation } from "react-i18next";
 import "./styles.sass";
 import { getFullName } from "@/common/utils/avatar.js";
@@ -200,6 +201,7 @@ export const UserSearch = ({
                     ref={dropdownRef}
                     className={`user-search__dropdown ${isPositioned ? "open" : ""}`}
                     style={{ top: position.top, left: position.left, width: position.width }}
+                    {...POPOVER_LAYER}
                     onMouseDown={(e) => e.stopPropagation()}
                     onClick={(e) => e.stopPropagation()}
                 >

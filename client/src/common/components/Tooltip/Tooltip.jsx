@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
+import { POPOVER_LAYER } from "@/common/utils/layers.js";
 import "./styles.sass";
 
 export const Tooltip = ({ children, text, disabled = false, delay = 0 }) => {
@@ -74,7 +75,7 @@ export const Tooltip = ({ children, text, disabled = false, delay = 0 }) => {
             {children}
 
             {isVisible && createPortal(
-                <div ref={tooltipRef} className="tooltip" style={tooltipStyle}>
+                <div ref={tooltipRef} className="tooltip" style={tooltipStyle} {...POPOVER_LAYER}>
                     <div className="tooltip-content">
                         {text}
                     </div>

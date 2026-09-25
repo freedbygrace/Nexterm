@@ -4,6 +4,7 @@ import "./styles.sass";
 import Icon from "@mdi/react";
 import { mdiChevronDown, mdiMagnify, mdiClose } from "@mdi/js";
 import { useTranslation } from "react-i18next";
+import { POPOVER_LAYER } from "@/common/utils/layers.js";
 
 export const SelectBox = ({ options, selected, setSelected, id, disabled = false, searchable = false, multiple = false, placeholder }) => {
     const { t } = useTranslation();
@@ -210,7 +211,7 @@ export const SelectBox = ({ options, selected, setSelected, id, disabled = false
     
     return (
         <div className={`select-box ${disabled ? 'disabled' : ''} ${multiple ? 'select-box--multiple' : ''}`} ref={selectBoxRef}>
-            <div className="select-box__selected" onClick={() => !disabled && setIsOpen(!isOpen)}>
+            <div className="select-box__selected" id={id} onClick={() => !disabled && setIsOpen(!isOpen)}>
                 <div className={`select-box__selected-content ${!hasIconProperty && !multiple ? 'icon-only' : ''}`}>
                     {renderSelectedContent()}
                 </div>
@@ -227,7 +228,7 @@ export const SelectBox = ({ options, selected, setSelected, id, disabled = false
                 <div 
                     ref={optionsRef}
                     className={`select-box__options ${isOpen && isPositioned ? 'open' : 'closed'}`}
-                    id={id || 'select-box-portal'}
+                    {...POPOVER_LAYER}
                     style={{ 
                         top: `${adjustedPosition.top}px`, 
                         left: `${adjustedPosition.left}px`,

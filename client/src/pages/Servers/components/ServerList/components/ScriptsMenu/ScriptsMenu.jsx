@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next";
 import { getRequest } from "@/common/utils/RequestUtil.js";
 import { matchesOsFilter, normalizeOsName } from "@/common/utils/osUtils.js";
 import { useScripts } from "@/common/contexts/ScriptContext.jsx";
+import { POPOVER_LAYER } from "@/common/utils/layers.js";
 
 const KONAMI_CODE = ["ArrowUp", "ArrowUp", "ArrowDown", "ArrowDown", "ArrowLeft", "ArrowRight", "ArrowLeft", "ArrowRight", "b", "a"];
 
@@ -158,7 +159,7 @@ export const ScriptsMenu = ({ visible, onClose, scripts = [], server, serverOrga
     if (!isVisible) return null;
 
     return createPortal(
-        <div className="scripts-menu-overlay" onClick={onClose}>
+        <div className="scripts-menu-overlay" onClick={onClose} {...POPOVER_LAYER}>
             <div
                 ref={menuRef}
                 className={`scripts-menu ${visible && isPositioned ? "open" : "closed"}`}

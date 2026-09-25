@@ -13,6 +13,7 @@ import Button from "@/common/components/Button";
 import IconInput from "@/common/components/IconInput";
 import SelectBox from "@/common/components/SelectBox";
 import KeyMaterialField from "./KeyMaterialField.jsx";
+import ToggleSwitch from "@/common/components/ToggleSwitch";
 import "./styles.sass";
 
 export const IdentityDialog = ({ open, onClose, identity, organizationId }) => {
@@ -27,6 +28,8 @@ export const IdentityDialog = ({ open, onClose, identity, organizationId }) => {
     const [sshKey, setSshKey] = useState(null);
     const [sshCertificate, setSshCertificate] = useState(null);
     const [passphrase, setPassphrase] = useState("");
+    // Sign a certificate from the scope's CA for every connection (see controllers/certificateAuthority).
+    const [useCertificateAuthority, setUseCertificateAuthority] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     
     const initialValues = useRef({ name: '', username: '', authType: 'password', password: '', sshKey: null, sshCertificate: null, passphrase: '' });
@@ -41,6 +44,7 @@ export const IdentityDialog = ({ open, onClose, identity, organizationId }) => {
                 setSshKey(identity.sshKey || null);
                 setSshCertificate(identity.sshCertificate || null);
                 setPassphrase("********");
+                setUseCertificateAuthority(Boolean(identity.useCertificateAuthority));
                 initialValues.current = {
                     name: identity.name || '',
                     username: identity.username || '',
@@ -64,6 +68,7 @@ export const IdentityDialog = ({ open, onClose, identity, organizationId }) => {
         setSshKey(null);
         setSshCertificate(null);
         setPassphrase("");
+        setUseCertificateAuthority(false);
         initialValues.current = { name: '', username: '', authType: 'password', password: '', sshKey: null, sshCertificate: null, passphrase: '' };
     };
 
@@ -98,6 +103,7 @@ export const IdentityDialog = ({ open, onClose, identity, organizationId }) => {
                             ...(passphrase && passphrase !== "********" ? { passphrase } : {}),
                         }
                 ),
+                ...(authType === "ssh" || authType === "both" ? { useCertificateAuthority } : {}),
             };
 
             if (isEditing) {
@@ -130,6 +136,7 @@ export const IdentityDialog = ({ open, onClose, identity, organizationId }) => {
                      password !== initialValues.current.password || 
                      sshKey !== initialValues.current.sshKey || 
                      sshCertificate !== initialValues.current.sshCertificate ||
+                     useCertificateAuthority !== Boolean(identity?.useCertificateAuthority) ||
                      passphrase !== initialValues.current.passphrase;
 
     return (
@@ -184,10 +191,22 @@ export const IdentityDialog = ({ open, onClose, identity, organizationId }) => {
                                                   label={t('settings.identities.dialog.fields.sshKey')}
                                                   value={sshKey} onChange={setSshKey} />
 
-                                <KeyMaterialField id="sshCertificate" kind="certificate" editing={isEditing}
-                                                  label={t('settings.identities.dialog.fields.sshCertificate')}
-                                                  accept=".pub,.crt,.cert,text/plain"
-                                                  value={sshCertificate} onChange={setSshCertificate} />
+                                <div className="form-toggle">
+                                    <div className="toggle-text">
+                                        <label htmlFor="useCertificateAuthority">{t('settings.identities.dialog.fields.useCertificateAuthority')}</label>
+                                        <p>{t('settings.identities.dialog.fields.useCertificateAuthorityHint')}</p>
+                                    </div>
+                                    <ToggleSwitch id="useCertificateAuthority" checked={useCertificateAuthority}
+                                                  onChange={setUseCertificateAuthority} />
+                                </div>
+
+                                {/* A signed-per-connection certificate replaces any uploaded one. */}
+                                {!useCertificateAuthority && (
+                                    <KeyMaterialField id="sshCertificate" kind="certificate" editing={isEditing}
+                                                      label={t('settings.identities.dialog.fields.sshCertificate')}
+                                                      accept=".pub,.crt,.cert,text/plain"
+                                                      value={sshCertificate} onChange={setSshCertificate} />
+                                )}
 
                                 <div className="form-group">
                                     <label htmlFor="passphrase">{t('settings.identities.dialog.fields.passphrase')}</label>

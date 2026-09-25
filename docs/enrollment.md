@@ -1,14 +1,34 @@
 # 🔑 Host Enrollment
 
 Enrollment turns adding a server into one command run on the server itself. Nexterm generates an SSH key
-pair, keeps the private half, and hands you a command that installs the public half on the target and
-creates the connection for you.
+pair, keeps the private half, and hands you a command that grants it access on the target and creates the
+connection for you.
 
-```
+```sh
+# Linux, macOS, BSD
 curl -fsSL https://nexterm.example/api/enroll/<token> | sh
 ```
 
+```powershell
+# Windows (OpenSSH server), from an elevated PowerShell
+irm https://nexterm.example/api/enroll/<token>/ps1 | iex
+```
+
 You never type a password into Nexterm, and no private key ever leaves it.
+
+## Key or certificate authority
+
+A token grants access one of two ways:
+
+| Method | On the host | When to use it |
+| :-- | :-- | :-- |
+| **Public key** | adds the token's key to the target user's `authorized_keys` | a handful of hosts, or no root access |
+| **Certificate authority** | makes sshd trust Nexterm's SSH user CA (`TrustedUserCAKeys`) | fleets: one trust anchor, nothing per user |
+
+With the certificate method, Nexterm signs a certificate **valid for ten minutes** for every connection,
+for the identity's user name only. There is no long-lived certificate to leak, and nothing to clean out of
+`authorized_keys` later. It needs root on the host, because it edits sshd's configuration; the Linux
+command is shown with `sudo sh`. See [SSH certificates](./ssh-certificates.md) for how the CA works.
 
 ## Creating a token
 
@@ -16,6 +36,7 @@ You never type a password into Nexterm, and no private key ever leaves it.
 
 | Option | Meaning |
 | :-- | :-- |
+| Access by | Public key, or certificate authority (see above) |
 | Scope | Personal, or an organization (the key and the connections belong to it) |
 | Target user | The account the key is installed for, `root` by default |
 | Uses | Single use, a fixed number, or unlimited for a token you keep reusing |
@@ -23,21 +44,41 @@ You never type a password into Nexterm, and no private key ever leaves it.
 | Folder | Where enrolled connections are created |
 | Create connections | Off if you only want the key installed |
 
-The command is shown **once**, when the token is created. The token itself is never displayed again;
-the list afterwards shows only the public key, its fingerprint, and how often it has been used.
+The commands are shown **once**, when the token is created: Linux & macOS, Windows, cloud-init and
+Cloudbase-init. The token itself is never displayed again; the list afterwards shows only the fingerprints
+and how often it has been used.
 
 ## What the command does
 
-The script is short and worth reading before piping anything into a shell. In order, it:
+The scripts are short and worth reading before piping anything into a shell. With a **public key**, the
+Linux/macOS script:
 
-1. finds the target user's home directory, refusing to install a key for another user unless it runs as root,
+1. finds the target user's home directory (`getent`, or `dscl` on macOS), refusing to install a key for
+   another user unless it runs as root,
 2. creates `~/.ssh` with mode 700 and `authorized_keys` with mode 600 if they are missing,
 3. adds the public key **only if it is not already there**, comparing the key material rather than the whole
    line, so a hand-edited comment does not produce a duplicate,
 4. reports the hostname, address, OS and SSH port back to Nexterm.
 
-Running it twice is safe. The second run says `key already installed` and updates the existing connection
-rather than creating a second one.
+With the **certificate authority**, it instead:
+
+1. asks sshd for its effective `TrustedUserCAKeys` (`sshd -T`). sshd honours only the first one it reads,
+   so an existing CA file is **extended**, never shadowed,
+2. otherwise adds `TrustedUserCAKeys /etc/ssh/nexterm_user_ca.pub` - as a drop-in in `sshd_config.d`
+   where the main config includes one (Debian, Ubuntu, Fedora), else before the first `Match` block,
+3. adds the CA key to that file once,
+4. checks the result with `sshd -t` and **restores the previous configuration** if sshd rejects it, then
+   reloads sshd (systemd, service, OpenRC or a HUP; macOS needs none).
+
+The Windows script does the same with OpenSSH for Windows: an administrator's key goes into
+`C:\ProgramData\ssh\administrators_authorized_keys` when `sshd_config` says so (the default), files are
+written without a byte-order mark and with the ACL sshd insists on, the CA line goes before the
+`Match Group administrators` block, and sshd is restarted. It runs inside a script block, so an error never
+closes your PowerShell window. It needs the OpenSSH server installed
+(`Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0`) and an elevated prompt.
+
+Running any of them twice is safe. The second run says `already installed` / `already trusted` and updates
+the existing connection rather than creating a second one.
 
 Nothing secret is sent back: the payload is a hostname, an address, an OS string and a port, and Nexterm
 rejects anything else.
@@ -64,6 +105,13 @@ needs. Two things are worth knowing:
 
 The same command works from Terraform's `user_data`, an Ansible task, a Packer provisioner or a Dockerfile
 entrypoint. It only needs `sh`, and `curl` or `wget`.
+
+Windows images use Cloudbase-init the same way (it runs user data as LocalSystem):
+
+```powershell
+#ps1_sysnative
+irm https://nexterm.example/api/enroll/<token>/ps1 | iex
+```
 
 ## Security
 
@@ -94,6 +142,10 @@ and one-off command through that identity is rejected until it is enabled again.
 Disabling is Nexterm's side of the door. To take the key off the host itself, remove the line from its
 `authorized_keys` - the fingerprint shown on the token identifies it.
 
+For certificate tokens, disabling the identity stops Nexterm signing certificates for it, and the last one
+it signed expires within ten minutes. The CA stays trusted on the host, because other identities in the same
+scope may rely on it; remove its line from the CA file to withdraw that trust too.
+
 ## API
 
 ```
@@ -102,8 +154,10 @@ GET    /api/enrollment       list tokens, without their secrets
 DELETE /api/enrollment/:id   revoke a token and disable the key it installed
                              (?keepIdentity=true revokes the token only)
 POST   /api/identities/:id/disabled  disable or enable an identity: {"disabled": true}
-GET    /api/enroll/:token    the shell script, no login required
+GET    /api/enroll/:token    the sh script (Linux, macOS, BSD), no login required
+GET    /api/enroll/:token/ps1   the PowerShell script (Windows), no login required
 POST   /api/enroll/:token/callback   report a host, no login required
+GET    /api/identities/certificate-authority   the scope's CA public key (?organizationId=)
 ```
 
 Creating a token:
@@ -115,9 +169,12 @@ Creating a token:
     "maxUses": null,
     "lifetimeDays": 30,
     "folderId": 4,
-    "createEntries": true
+    "createEntries": true,
+    "method": "certificate"
 }
 ```
 
-`maxUses: null` means unlimited, `lifetimeDays: null` means the token never expires. The response carries
-`token`, `command`, `publicKey` and `fingerprint`; the secret is never returned again.
+`maxUses: null` means unlimited, `lifetimeDays: null` means the token never expires, `method` is `key`
+(the default) or `certificate`. The response carries `token`, `commands.unix`, `commands.windows`,
+`publicKey` and `fingerprint` (plus `caPublicKey` and `caFingerprint` for certificate tokens);
+`command` repeats `commands.unix` for older clients. The secret is never returned again.

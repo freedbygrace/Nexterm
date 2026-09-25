@@ -193,3 +193,57 @@ describe("revokeEnrollmentToken", () => {
         assert.equal(tokens.find(t => t.name === "kept-batch").identityDisabled, false);
     });
 });
+
+describe("certificate authority", () => {
+    const { generateSshKeyPair } = require("./sshKeygen");
+
+    const certificateFields = (line) => {
+        const blob = Buffer.from(line.split(" ")[1], "base64");
+        let offset = 0;
+        const string = () => { const n = blob.readUInt32BE(offset); const v = blob.subarray(offset + 4, offset + 4 + n); offset += 4 + n; return v; };
+        const uint64 = () => { const v = blob.readBigUInt64BE(offset); offset += 8; return v; };
+        string(); string(); string(); string(); // type, nonce, e, n
+        uint64(); offset += 4;                   // serial, type
+        const keyId = string().toString();
+        const principals = string();
+        const validAfter = Number(uint64()) * 1000;
+        const validBefore = Number(uint64()) * 1000;
+        return { keyId, principal: principals.subarray(4).toString(), validAfter, validBefore };
+    };
+
+    it("signs a short-lived certificate for every connection of a linked identity", async () => {
+        const key = generateSshKeyPair({ modulusLength: 2048 });
+        const created = await identityController.createIdentity(accountId, {
+            name: "ca-linked", username: "deploy", type: "ssh", sshKey: key.privateKey, useCertificateAuthority: true,
+        });
+
+        const first = await identityController.getIdentityCredentials(created.id);
+        const second = await identityController.getIdentityCredentials(created.id);
+        assert.match(first["ssh-cert"], /^ssh-rsa-cert-v01@openssh\.com /);
+        assert.notEqual(first["ssh-cert"], second["ssh-cert"], "a new certificate per connection");
+
+        const cert = certificateFields(first["ssh-cert"]);
+        assert.equal(cert.principal, "deploy");
+        assert.equal(cert.keyId, `nexterm identity ${created.id}`);
+        assert.ok(cert.validAfter <= Date.now() && cert.validBefore > Date.now());
+        assert.ok(cert.validBefore - Date.now() <= 10 * 60 * 1000 + 5000, "valid for minutes, not days");
+
+        const listed = (await identityController.listIdentities(accountId)).find(i => i.id === created.id);
+        assert.equal(listed.useCertificateAuthority, true);
+    });
+
+    it("uses one CA per scope and none once unlinked", async () => {
+        const key = generateSshKeyPair({ modulusLength: 2048 });
+        const created = await identityController.createIdentity(accountId, {
+            name: "ca-toggled", username: "ops", type: "ssh", sshKey: key.privateKey, useCertificateAuthority: true,
+        });
+        const { getCertificateAuthority } = require("../controllers/certificateAuthority");
+        const authority = await getCertificateAuthority(accountId);
+        assert.match(authority.publicKey, /^ssh-ed25519 /);
+        assert.equal((await Identity.findByPk(created.id)).certificateAuthorityId, authority.id);
+
+        await identityController.updateIdentity(accountId, created.id, { useCertificateAuthority: false });
+        const creds = await identityController.getIdentityCredentials(created.id);
+        assert.equal(creds["ssh-cert"], undefined);
+    });
+});

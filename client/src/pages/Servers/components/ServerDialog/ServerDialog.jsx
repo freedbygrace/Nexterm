@@ -58,6 +58,12 @@ export const ServerDialog = ({ open, onClose, currentFolderId, currentOrganizati
 
     const [identityUpdates, setIdentityUpdates] = useState({});
 
+    // While an entry is loading the form holds nothing of it (or the previous entry's values, the dialog
+    // stays mounted), so it is not shown or saved until the entry arrives. A slow response for an entry
+    // the dialog has already moved on from is ignored.
+    const [loadingEntry, setLoadingEntry] = useState(false);
+    const loadSeq = useRef(0);
+
     const [activeTab, setActiveTab] = useState(0);
 
     const initialValues = useRef({ name: '', icon: null, config: {}, monitoringEnabled: false });
@@ -257,6 +263,7 @@ export const ServerDialog = ({ open, onClose, currentFolderId, currentOrganizati
     };
 
     const handleSubmit = useCallback(() => {
+        if (loadingEntry) return;
         if (entryType === "server" && enabledProtocols.length === 0) {
             sendToast("Error", t("servers.dialog.messages.noProtocolEnabled"));
             return;
@@ -266,13 +273,16 @@ export const ServerDialog = ({ open, onClose, currentFolderId, currentOrganizati
             return;
         }
         editServerId ? patchServer() : createServer();
-    }, [name, icon, editServerId, identityUpdates, currentFolderId, config, monitoringEnabled, entryType, enabledProtocols, t]);
+    }, [name, icon, editServerId, identityUpdates, currentFolderId, config, monitoringEnabled, entryType, enabledProtocols, loadingEntry, t]);
 
     useEffect(() => {
         if (!open) return;
 
+        const seq = ++loadSeq.current;
         if (editServerId) {
+            setLoadingEntry(true);
             getRequest("entries/" + editServerId).then((server) => {
+                if (seq !== loadSeq.current) return;
                 const type = server.type || "server";
                 setName(server.name);
                 setIcon(server.icon || null);
@@ -288,8 +298,15 @@ export const ServerDialog = ({ open, onClose, currentFolderId, currentOrganizati
                     config: JSON.stringify(parsedConfig),
                     monitoringEnabled: Boolean(parsedConfig.monitoringEnabled ?? true)
                 };
+                setLoadingEntry(false);
+            }).catch((error) => {
+                if (seq !== loadSeq.current) return;
+                setLoadingEntry(false);
+                sendToast("Error", error?.message || t("servers.dialog.messages.loadFailed"));
+                onClose();
             });
         } else {
+            setLoadingEntry(false);
             setName("");
             setIcon(null);
             setIdentities([]);
@@ -419,23 +436,24 @@ export const ServerDialog = ({ open, onClose, currentFolderId, currentOrganizati
                 )}
 
                 <form className="server-dialog-content" onSubmit={(e) => e.preventDefault()} autoComplete="on">
-                    {activeTab === 0 && <DetailsPage name={name} setName={setName}
+                    {loadingEntry && <p className="server-dialog-loading">{t("common.loading")}</p>}
+                    {!loadingEntry && activeTab === 0 && <DetailsPage name={name} setName={setName}
                                                      icon={icon} setIcon={setIcon}
                                                      config={config} setConfig={setConfig}
                                                      fieldConfig={fieldConfig} entryType={entryType}
                                                      identityOptions={linkedIdentityOptions} />}
-                    {activeTab === 1 && tabs[1]?.key === "identities" &&
+                    {!loadingEntry && activeTab === 1 && tabs[1]?.key === "identities" &&
                         <IdentityPage serverIdentities={identities} setIdentityUpdates={setIdentityUpdates}
                                       identityUpdates={identityUpdates} setIdentities={setIdentities}
                                       currentOrganizationId={currentOrganizationId} allowedAuthTypes={fieldConfig.allowedAuthTypes}
                                       serverName={name} />}
-                    {tabs.find((tab, idx) => idx === activeTab && tab.key === "settings") &&
+                    {!loadingEntry && tabs.find((tab, idx) => idx === activeTab && tab.key === "settings") &&
                         <SettingsPage config={config} setConfig={setConfig}
                                       monitoringEnabled={monitoringEnabled} setMonitoringEnabled={setMonitoringEnabled}
                                       fieldConfig={fieldConfig} editServerId={editServerId} />}
                 </form>
 
-                <Button className="server-dialog-button" onClick={handleSubmit}
+                <Button className="server-dialog-button" onClick={handleSubmit} disabled={loadingEntry}
                         text={editServerId ? t("servers.dialog.actions.save") : t("servers.dialog.actions.create")} />
             </div>
 

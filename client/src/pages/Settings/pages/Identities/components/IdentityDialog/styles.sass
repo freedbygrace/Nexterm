@@ -36,6 +36,126 @@
         font-weight: 600
         font-size: 0.9rem
 
+    // A key or certificate: a file or pasted text, with a hint about what was given.
+    .key-material
+      .key-material-header
+        display: flex
+        align-items: center
+        justify-content: space-between
+        gap: 0.5rem
+
+      .key-material-modes
+        display: inline-flex
+        padding: 0.15rem
+        border-radius: 0.5rem
+        background-color: colors.$dark-gray
+
+        button
+          display: inline-flex
+          align-items: center
+          gap: 0.3rem
+          padding: 0.25rem 0.55rem
+          border: none
+          border-radius: 0.4rem
+          background: transparent
+          color: colors.$subtext
+          font-family: inherit
+          font-size: 0.75rem
+          font-weight: 600
+          cursor: pointer
+
+          svg
+            width: 0.85rem
+            height: 0.85rem
+
+          &.active
+            background-color: colors.$gray
+            color: colors.$white
+
+      .key-material-drop
+        display: flex
+        align-items: center
+        gap: 0.6rem
+        padding: 0.75rem 0.9rem
+        border: 1px dashed colors.$gray
+        border-radius: 0.5rem
+        color: colors.$subtext
+        font-weight: 500
+        font-size: 0.85rem
+        cursor: pointer
+        overflow: hidden
+
+        svg
+          width: 1.1rem
+          height: 1.1rem
+          flex-shrink: 0
+
+        span
+          overflow: hidden
+          text-overflow: ellipsis
+          white-space: nowrap
+
+        input
+          display: none
+
+        &:hover
+          border-color: colors.$primary
+          color: colors.$white
+
+      .key-material-text
+        width: 100%
+        box-sizing: border-box
+        padding: 0.6rem 0.75rem
+        border: 1px solid colors.$gray
+        border-radius: 0.5rem
+        background-color: colors.$darker-gray
+        color: colors.$white
+        font-family: monospace
+        font-size: 0.75rem
+        resize: vertical
+        user-select: text
+        outline: none
+
+        &:focus
+          border-color: colors.$primary
+
+      .key-material-status
+        display: flex
+        align-items: center
+        gap: 0.35rem
+        min-height: 1rem
+        color: colors.$subtext
+        font-size: 0.78rem
+
+        > svg
+          width: 0.9rem
+          height: 0.9rem
+          color: colors.$success
+
+        &.warning > svg
+          color: colors.$warning
+
+        &.warning span
+          color: colors.$warning
+
+        .key-material-clear
+          display: inline-flex
+          margin-left: auto
+          padding: 0.1rem
+          border: none
+          border-radius: 0.3rem
+          background: transparent
+          color: colors.$subtext
+          cursor: pointer
+
+          svg
+            width: 0.9rem
+            height: 0.9rem
+
+          &:hover
+            background-color: colors.$gray
+            color: colors.$white
+
     .form-row
       display: grid
       grid-template-columns: 1fr 1fr

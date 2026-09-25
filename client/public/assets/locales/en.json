@@ -1302,6 +1302,21 @@
           "passphrasePlaceholder": "Enter passphrase (optional)",
           "passphrasePlaceholderEdit": "Leave blank to keep current passphrase"
         },
+        "keyInput": {
+          "upload": "File",
+          "paste": "Paste",
+          "chooseFile": "Choose a file…",
+          "keyPlaceholder": "-----BEGIN OPENSSH PRIVATE KEY-----",
+          "certPlaceholder": "ssh-ed25519-cert-v01@openssh.com AAAA…",
+          "loaded": "Ready",
+          "keepCurrent": "Leave empty to keep the stored one.",
+          "clear": "Clear",
+          "looksLikePublicKey": "This is a public key - Nexterm needs the private key.",
+          "puttyKey": "PuTTY key: convert it first (puttygen key.ppk -O private-openssh -o key).",
+          "notAPrivateKey": "This does not look like a private key.",
+          "notACertificate": "This does not look like an OpenSSH certificate (…-cert.pub).",
+          "certLooksLikeKey": "This is a private key - the certificate is the …-cert.pub file."
+        },
         "authTypes": {
           "password": "Password",
           "password-only": "No Username",

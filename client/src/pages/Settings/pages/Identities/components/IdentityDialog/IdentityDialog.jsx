@@ -5,7 +5,6 @@ import { patchRequest, putRequest } from "@/common/utils/RequestUtil.js";
 import { useToast } from "@/common/contexts/ToastContext.jsx";
 import {
     mdiAccountCircleOutline,
-    mdiFileUploadOutline,
     mdiLockOutline,
     mdiKey,
 } from "@mdi/js";
@@ -13,6 +12,7 @@ import Icon from "@mdi/react";
 import Button from "@/common/components/Button";
 import IconInput from "@/common/components/IconInput";
 import SelectBox from "@/common/components/SelectBox";
+import KeyMaterialField from "./KeyMaterialField.jsx";
 import "./styles.sass";
 
 export const IdentityDialog = ({ open, onClose, identity, organizationId }) => {
@@ -67,28 +67,14 @@ export const IdentityDialog = ({ open, onClose, identity, organizationId }) => {
         initialValues.current = { name: '', username: '', authType: 'password', password: '', sshKey: null, sshCertificate: null, passphrase: '' };
     };
 
-    const readFile = (event) => {
-        const file = event.target.files[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            setSshKey(e.target.result);
-        };
-        reader.readAsText(file);
-    };
-
-    const readCertificate = (event) => {
-        const file = event.target.files[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.onload = (e) => setSshCertificate(e.target.result);
-        reader.readAsText(file);
-    };
-
     const handleSubmit = async (e) => {
         e.preventDefault();
+
+        // The key can be pasted now, so "required" is no longer something the file input can enforce.
+        if (!isEditing && (authType === "ssh" || authType === "both") && !sshKey?.trim()) {
+            sendToast("Error", t('settings.identities.dialog.messages.sshKeyRequired'));
+            return;
+        }
 
         setIsLoading(true);
 
@@ -194,17 +180,14 @@ export const IdentityDialog = ({ open, onClose, identity, organizationId }) => {
 
                         {(authType === "ssh" || authType === "both") && (
                             <>
-                                <div className="form-group">
-                                    <label htmlFor="sshKey">{t('settings.identities.dialog.fields.sshKey')}</label>
-                                    <IconInput icon={mdiFileUploadOutline} type="file" onChange={readFile} id="sshKey"
-                                               required={!isEditing} />
-                                </div>
+                                <KeyMaterialField id="sshKey" kind="privateKey" editing={isEditing}
+                                                  label={t('settings.identities.dialog.fields.sshKey')}
+                                                  value={sshKey} onChange={setSshKey} />
 
-                                <div className="form-group">
-                                    <label htmlFor="sshCertificate">{t('settings.identities.dialog.fields.sshCertificate')}</label>
-                                    <IconInput icon={mdiFileUploadOutline} type="file" onChange={readCertificate} id="sshCertificate"
-                                               accept=".pub,.crt,.cert,text/plain" />
-                                </div>
+                                <KeyMaterialField id="sshCertificate" kind="certificate" editing={isEditing}
+                                                  label={t('settings.identities.dialog.fields.sshCertificate')}
+                                                  accept=".pub,.crt,.cert,text/plain"
+                                                  value={sshCertificate} onChange={setSshCertificate} />
 
                                 <div className="form-group">
                                     <label htmlFor="passphrase">{t('settings.identities.dialog.fields.passphrase')}</label>

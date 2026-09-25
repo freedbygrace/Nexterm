@@ -12,6 +12,12 @@
  * user name), and every one is quoted for its shell, so a value can never break out into the script.
  */
 
+/**
+ * Scripts are template literals in this file, so a Windows checkout (core.autocrlf) would serve them
+ * with CRLF endings, which sh reads as part of every command. Served scripts always use LF.
+ */
+const lf = (text) => text.replace(/\r\n/g, "\n");
+
 /** Wraps a value in single quotes for POSIX sh, escaping any single quotes inside it. */
 const shellQuote = (value) => `'${String(value).replaceAll("'", `'\\''`)}'`;
 
@@ -171,7 +177,7 @@ log "enrolled: $RESPONSE"
  */
 module.exports.buildEnrollmentScript = ({ method = "key", publicKey, caPublicKey, callbackUrl, username, createEntries }) => {
     const certificate = method === "certificate";
-    return `#!/bin/sh
+    return lf(`#!/bin/sh
 # Nexterm host enrollment.
 #
 ${certificate
@@ -194,7 +200,7 @@ append_line() {
     if [ -s "$1" ] && [ "$(tail -c1 "$1" | wc -l)" -eq 0 ]; then printf '\\n' >> "$1"; fi
     printf '%s\\n' "$2" >> "$1"
 }
-${certificate ? SH_TRUST_CA : SH_INSTALL_KEY}${SH_REPORT}`;
+${certificate ? SH_TRUST_CA : SH_INSTALL_KEY}${SH_REPORT}`);
 };
 
 // -------------------------------------------------------------------------------------- PowerShell

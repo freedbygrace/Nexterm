@@ -166,3 +166,14 @@ describe("Windows enrollment script", () => {
         assert.equal(buildPowerShellError("it's revoked"), "Write-Host 'nexterm: it''s revoked' -ForegroundColor Red\n");
     });
 });
+
+describe("line endings", () => {
+    const { buildEnrollmentScript: build } = require("./enrollmentScript");
+
+    it("serves sh scripts with LF only, even from a CRLF checkout", () => {
+        for (const method of ["key", "certificate"]) {
+            const text = build({ method, publicKey: PUBLIC_KEY, caPublicKey: "ssh-ed25519 AAAA ca", callbackUrl: "https://n/cb", username: "u", createEntries: true });
+            assert.ok(!text.includes("\r"), `${method} script contains CR`);
+        }
+    });
+});

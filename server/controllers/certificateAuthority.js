@@ -47,7 +47,13 @@ module.exports.getOrCreateCertificateAuthority = async (accountId, organizationI
 module.exports.getCertificateAuthority = async (accountId, organizationId = null) => {
     if (organizationId && !(await hasOrganizationAccess(accountId, organizationId)))
         return { code: 403, message: "No access to this organization" };
-    return toPublicAuthority(await findAuthority(scopeWhere(accountId, organizationId)));
+    // A plain row: model instances read the ISO dates utils/database.js writes as Invalid Date.
+    const authority = await SshCertificateAuthority.findOne({
+        where: scopeWhere(accountId, organizationId),
+        order: [["id", "ASC"]],
+        attributes: ["id", "organizationId", "publicKey", "createdAt"],
+    });
+    return toPublicAuthority(authority);
 };
 
 module.exports.toPublicAuthority = toPublicAuthority;

@@ -303,3 +303,51 @@ describe("organization certificate authority permissions", () => {
         assert.ok(keyToken.token, "key tokens are unchanged");
     });
 });
+
+describe("enrollment callback", () => {
+    const Entry = require("../models/Entry");
+    const entryConfig = async (id) => (await Entry.findByPk(id)).config;
+
+    it("adds RDP when the host reports it listening", async () => {
+        const token = await enrollmentController.createEnrollmentToken(accountId, { name: "rdp-batch", maxUses: null });
+        const result = await enrollmentController.completeEnrollment(token.token,
+            { hostname: "win-rdp-01", address: "10.1.1.5", port: 22, rdpPort: 3390 }, "10.1.1.5");
+        const config = await entryConfig(result.entryId);
+
+        assert.equal(config.protocols.rdp.enabled, true);
+        assert.equal(config.protocols.rdp.port, 3390);
+        assert.equal(config.protocols.ssh.enabled, true);
+        assert.equal(config.protocol, "ssh", "SSH stays primary: the enrollment key cannot log in over RDP");
+    });
+
+    it("leaves RDP out when the host does not report it", async () => {
+        const token = await enrollmentController.createEnrollmentToken(accountId, { name: "no-rdp", maxUses: null });
+        const result = await enrollmentController.completeEnrollment(token.token,
+            { hostname: "linux-01", address: "10.1.1.6", port: 22 }, "10.1.1.6");
+        assert.equal((await entryConfig(result.entryId)).protocols.rdp, undefined);
+    });
+
+    it("keeps protocols and settings added by hand when a host enrolls again", async () => {
+        const token = await enrollmentController.createEnrollmentToken(accountId, { name: "rerun", maxUses: null });
+        const first = await enrollmentController.completeEnrollment(token.token,
+            { hostname: "mixed-01", address: "10.1.1.7", port: 22 }, "10.1.1.7");
+
+        const entry = await Entry.findByPk(first.entryId, { raw: false });
+        await entry.update({ config: {
+            ...entry.config,
+            protocol: "vnc",
+            protocols: { ...entry.config.protocols, vnc: { enabled: true, port: 5901, identityId: 777 } },
+        } });
+
+        const again = await enrollmentController.completeEnrollment(token.token,
+            { hostname: "mixed-01", address: "10.1.1.8", port: 2222, rdpPort: 3389 }, "10.1.1.8");
+        assert.equal(again.entryId, first.entryId);
+
+        const config = await entryConfig(first.entryId);
+        assert.deepEqual(config.protocols.vnc, { enabled: true, port: 5901, identityId: 777 }, "hand-added protocol kept");
+        assert.equal(config.protocol, "vnc", "chosen primary kept");
+        assert.equal(config.protocols.ssh.port, 2222, "detected port updated");
+        assert.equal(config.protocols.rdp.port, 3389, "newly detected RDP added");
+        assert.equal(config.ip, "10.1.1.8");
+    });
+});

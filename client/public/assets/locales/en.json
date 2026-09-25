@@ -1300,7 +1300,9 @@
           "sshCertificate": "SSH Client Certificate (optional)",
           "passphrase": "Passphrase (optional)",
           "passphrasePlaceholder": "Enter passphrase (optional)",
-          "passphrasePlaceholderEdit": "Leave blank to keep current passphrase"
+          "passphrasePlaceholderEdit": "Leave blank to keep current passphrase",
+          "useCertificateAuthority": "Sign with the certificate authority",
+          "useCertificateAuthorityHint": "Each connection gets a certificate valid for 10 minutes, accepted by every host that trusts this scope's CA. Needs an RSA key."
         },
         "keyInput": {
           "upload": "File",
@@ -1380,15 +1382,14 @@
         "uses": "Uses",
         "expiry": "Expiry",
         "fingerprint": "Key fingerprint",
-        "keyState": "Key state"
+        "keyState": "Key state",
+        "caFingerprint": "Certificate authority fingerprint",
+        "method": "Method"
       },
       "dialog": {
         "createTitle": "Create Enrollment Token",
         "resultTitle": "\"{{name}}\" is ready",
         "shownOnce": "This command contains the token and is shown only once. Copy it now - it cannot be retrieved later.",
-        "command": "Run this on the host",
-        "commandHint": "Installs the key for the target user and reports the host back to Nexterm.",
-        "cloudInit": "Cloud-init",
         "cloudInitHint": "Paste this as the user data of a new machine to enroll it on first boot.",
         "copyFailed": "Failed to copy to clipboard",
         "createFailed": "Failed to create enrollment token",
@@ -1404,7 +1405,8 @@
           "createEntries": "Create connections automatically",
           "createEntriesHint": "Add each enrolled host to Nexterm as a connection.",
           "folder": "Folder for new connections",
-          "noFolder": "No folder"
+          "noFolder": "No folder",
+          "method": "Access by"
         },
         "useModes": {
           "single": "Single use",
@@ -1421,7 +1423,36 @@
           "create": "Create Token",
           "copyAndClose": "Copy & Close",
           "done": "Done"
-        }
+        },
+        "methods": {
+          "key": {
+            "title": "Public key",
+            "hint": "Installs a key in the user's authorized_keys. Works as any user."
+          },
+          "certificate": {
+            "title": "Certificate authority",
+            "hint": "sshd trusts Nexterm's CA; each connection gets a certificate valid for minutes. Needs root."
+          }
+        },
+        "runners": {
+          "unix": "Linux & macOS",
+          "windows": "Windows",
+          "cloudInit": "cloud-init",
+          "cloudbaseInit": "Cloudbase-init"
+        },
+        "unixHint": "Run it on the host. Needs curl or wget.",
+        "windowsHint": "Run it in an elevated PowerShell on a host with the OpenSSH server installed.",
+        "cloudbaseInitHint": "Paste this as the user data of a new Windows machine to enroll it on first boot.",
+        "certificateNeedsRoot": "Trusting the CA edits sshd_config, so it runs through sudo."
+      },
+      "methods": {
+        "key": "Key",
+        "certificate": "CA"
+      },
+      "authority": {
+        "title": "SSH certificate authority",
+        "description": "Hosts that trust this key accept the certificates Nexterm signs for each connection. Certificate tokens install it for you; copy it for Ansible or a golden image.",
+        "copy": "Copy public key"
       }
     },
     "sources": {

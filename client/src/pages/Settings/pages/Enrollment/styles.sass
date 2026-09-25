@@ -42,6 +42,67 @@
         gap: 0.75rem
         align-items: center
 
+    // The scope's SSH certificate authority: what hosts trust for certificate enrollment.
+    .authority-card
+      display: flex
+      align-items: center
+      gap: 1rem
+      margin-bottom: 1rem
+      padding: 1rem 1.25rem
+      border: 1px solid colors.$dark-gray
+      border-radius: 0.75rem
+      background-color: colors.$lighter-background
+
+      @media (max-width: breakpoints.$mobile)
+        flex-wrap: wrap
+
+      .authority-icon
+        width: 2rem
+        height: 2rem
+        flex-shrink: 0
+        color: colors.$primary
+
+      .authority-details
+        flex: 1
+        min-width: 0
+        display: flex
+        flex-direction: column
+        gap: 0.3rem
+
+        h3
+          margin: 0
+          font-size: 0.95rem
+          color: colors.$white
+
+        p
+          font-size: 0.8rem
+
+        code
+          font-size: 0.75rem
+          color: colors.$subtext
+          word-break: break-all
+
+      .authority-copy
+        display: inline-flex
+        align-items: center
+        gap: 0.4rem
+        flex-shrink: 0
+        padding: 0.45rem 0.75rem
+        border: 1px solid colors.$gray
+        border-radius: 0.5rem
+        background: transparent
+        color: colors.$white
+        font-family: inherit
+        font-size: 0.8rem
+        cursor: pointer
+
+        &:hover
+          background-color: colors.$gray
+
+        &.copied
+          border-color: colors.$success
+          color: colors.$success
+
     .tokens-grid
       display: grid
       grid-template-columns: repeat(auto-fill, minmax(340px, 1fr))
@@ -125,6 +186,16 @@
               &.state-expired, &.state-usedUp
                 background-color: colors.$warning-opacity
                 color: colors.$warning
+
+            .token-method
+              padding: 0.2rem 0.5rem
+              border-radius: 0.75rem
+              font-size: 0.7rem
+              font-weight: 600
+              text-transform: uppercase
+              letter-spacing: 0.02em
+              background-color: colors.$primary-opacity
+              color: colors.$primary
 
             .token-scope
               margin: 0 0 0.5rem 0

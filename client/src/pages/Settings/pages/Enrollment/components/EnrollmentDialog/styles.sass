@@ -1,6 +1,85 @@
 @use "@/common/styles/colors"
 @use "@/common/styles/breakpoints"
 
+// Key or certificate: two cards side by side, stacked on a phone.
+.enrollment-dialog .method-choice
+  display: grid
+  grid-template-columns: 1fr 1fr
+  gap: 0.5rem
+
+  @media (max-width: breakpoints.$mobile)
+    grid-template-columns: 1fr
+
+  button
+    display: flex
+    align-items: flex-start
+    gap: 0.6rem
+    padding: 0.7rem 0.8rem
+    border: 1px solid colors.$gray
+    border-radius: 0.6rem
+    background: transparent
+    color: colors.$subtext
+    font-family: inherit
+    text-align: left
+    cursor: pointer
+
+    svg
+      flex-shrink: 0
+      margin-top: 0.1rem
+
+    .method-text
+      display: flex
+      flex-direction: column
+      gap: 0.2rem
+
+      strong
+        color: colors.$white
+        font-size: 0.85rem
+
+      small
+        font-size: 0.75rem
+        line-height: 1.35
+
+    &:hover
+      border-color: colors.$primary
+
+    &.active
+      border-color: colors.$primary
+      background-color: colors.$primary-opacity
+
+      svg
+        color: colors.$primary
+
+// One command per way of running it.
+.enrollment-dialog .runner-tabs
+  display: flex
+  flex-wrap: wrap
+  gap: 0.25rem
+  padding: 0.2rem
+  border-radius: 0.6rem
+  background-color: colors.$dark-gray
+
+  button
+    display: inline-flex
+    align-items: center
+    gap: 0.35rem
+    padding: 0.35rem 0.65rem
+    border: none
+    border-radius: 0.45rem
+    background: transparent
+    color: colors.$subtext
+    font-family: inherit
+    font-size: 0.78rem
+    font-weight: 600
+    cursor: pointer
+
+    &:hover
+      color: colors.$white
+
+    &.active
+      background-color: colors.$gray
+      color: colors.$white
+
 .enrollment-dialog
   display: flex
   flex-direction: column

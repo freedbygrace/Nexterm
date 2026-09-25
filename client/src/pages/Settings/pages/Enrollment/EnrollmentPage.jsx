@@ -8,13 +8,17 @@ import {
     mdiAccount,
     mdiAccountOutline,
     mdiCancel,
+    mdiCheck,
     mdiCloudKeyOutline,
+    mdiContentCopy,
     mdiDomain,
     mdiFingerprint,
     mdiKeyRemove,
     mdiKeyStar,
     mdiPlus,
+    mdiShieldKeyOutline,
 } from "@mdi/js";
+import { copyToClipboard } from "@/common/utils/clipboard.js";
 import Icon from "@mdi/react";
 import Button from "@/common/components/Button";
 import SelectBox from "@/common/components/SelectBox";
@@ -57,6 +61,9 @@ export const TokenCard = ({ token, scopeLabel, onRevoke, onToggleKey, canManage 
                     <div className="token-heading">
                         <h3>{token.name}</h3>
                         <span className={`token-state state-${state}`}>{t(`settings.enrollment.states.${state}`)}</span>
+                        <span className="token-method" title={t("settings.enrollment.fields.method")}>
+                            {t(`settings.enrollment.methods.${token.method || "key"}`)}
+                        </span>
                     </div>
                     <p className="token-scope">{scopeLabel}</p>
 
@@ -71,6 +78,12 @@ export const TokenCard = ({ token, scopeLabel, onRevoke, onToggleKey, canManage 
                         </span>
                         <span title={t("settings.enrollment.fields.expiry")}>{expiry()}</span>
                     </div>
+
+                    {token.caFingerprint && (
+                        <p className="token-fingerprint" title={t("settings.enrollment.fields.caFingerprint")}>
+                            <Icon path={mdiShieldKeyOutline} size={0.6} />{token.caFingerprint}
+                        </p>
+                    )}
 
                     {token.fingerprint && (
                         <p className={`token-fingerprint${token.identityDisabled ? " key-disabled" : ""}`}
@@ -138,8 +151,27 @@ export const EnrollmentPage = () => {
         fetchOrganizations();
     }, []);
 
+    // The scope's certificate authority, once one exists (certificate tokens and CA-linked identities create it).
+    const [authority, setAuthority] = useState(null);
+    const [authorityCopied, setAuthorityCopied] = useState(false);
+
+    const loadAuthority = async (organizationId) => {
+        try {
+            setAuthority(await getRequest(`identities/certificate-authority${organizationId ? `?organizationId=${organizationId}` : ""}`));
+        } catch {
+            setAuthority(null);
+        }
+    };
+
+    const copyAuthority = async () => {
+        if (!authority || !(await copyToClipboard(authority.publicKey))) return;
+        setAuthorityCopied(true);
+        setTimeout(() => setAuthorityCopied(false), 2000);
+    };
+
     useEffect(() => {
         loadTokens(selectedScope);
+        loadAuthority(selectedScope);
     }, [selectedScope]);
 
     const scopeOptions = useMemo(() => [
@@ -154,6 +186,7 @@ export const EnrollmentPage = () => {
     const handleDialogClose = () => {
         setDialogOpen(false);
         loadTokens(selectedScope);
+        loadAuthority(selectedScope);
     };
 
     /** Disabling the key is what stops connections to hosts that already enrolled. */
@@ -201,6 +234,21 @@ export const EnrollmentPage = () => {
                         )}
                     </div>
                 </div>
+
+                {authority && (
+                    <div className="authority-card">
+                        <Icon path={mdiShieldKeyOutline} className="authority-icon" />
+                        <div className="authority-details">
+                            <h3>{t("settings.enrollment.authority.title")}</h3>
+                            <p>{t("settings.enrollment.authority.description")}</p>
+                            <code title={t("settings.enrollment.fields.caFingerprint")}>{authority.fingerprint}</code>
+                        </div>
+                        <button type="button" className={`authority-copy${authorityCopied ? " copied" : ""}`} onClick={copyAuthority}>
+                            <Icon path={authorityCopied ? mdiCheck : mdiContentCopy} size={0.7} />
+                            {t("settings.enrollment.authority.copy")}
+                        </button>
+                    </div>
+                )}
 
                 <div className="tokens-grid">
                     {tokens.length > 0 ? tokens.map(token => (

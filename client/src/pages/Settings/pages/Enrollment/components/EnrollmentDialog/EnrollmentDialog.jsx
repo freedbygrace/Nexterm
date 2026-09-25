@@ -8,11 +8,17 @@ import { ServerContext } from "@/common/contexts/ServerContext.jsx";
 import {
     mdiAccountOutline,
     mdiAlertOutline,
+    mdiCertificateOutline,
     mdiCheck,
     mdiCloudKeyOutline,
+    mdiCloudUploadOutline,
     mdiContentCopy,
     mdiCounter,
     mdiFingerprint,
+    mdiKeyOutline,
+    mdiLinux,
+    mdiMicrosoftWindows,
+    mdiShieldKeyOutline,
     mdiTagOutline,
 } from "@mdi/js";
 import Icon from "@mdi/react";
@@ -25,14 +31,28 @@ import "./styles.sass";
 /** The three use limits the dialog offers; "limited" is the only one that reads the number field. */
 const USE_MODES = { SINGLE: "single", LIMITED: "limited", UNLIMITED: "unlimited" };
 
+/** How the token grants access: a key in authorized_keys, or sshd trusting the scope's CA. */
+const METHODS = { KEY: "key", CERTIFICATE: "certificate" };
+
+/** The script URL, taken from the command the server returned (its one http(s) token). */
+const scriptUrlOf = (command) => command?.match(/https?:\/\/\S+/)?.[0] || "";
+
 /**
- * Turns the returned command into the cloud-init form.
- *
- * The command is always `curl -fsSL <url> | sh`, so the url is the one http(s) token in it.
+ * Every way to run a token's script. cloud-init and Cloudbase-init run user data as root /
+ * LocalSystem, so neither needs sudo or an elevated prompt.
  */
-const cloudInitFrom = (command) => {
-    const url = command?.match(/https?:\/\/\S+/)?.[0] || "";
-    return `#cloud-config\nruncmd:\n  - curl -fsSL ${url} | sh\n`;
+const runnersFor = (result) => {
+    const url = scriptUrlOf(result.commands?.unix || result.command);
+    const unix = result.commands?.unix || result.command;
+    const windows = result.commands?.windows || `irm ${url}/ps1 | iex`;
+    return [
+        { key: "unix", icon: mdiLinux, command: unix, hint: "unixHint" },
+        { key: "windows", icon: mdiMicrosoftWindows, command: windows, hint: "windowsHint" },
+        { key: "cloudInit", icon: mdiCloudUploadOutline, multiline: true, hint: "cloudInitHint",
+            command: `#cloud-config\nruncmd:\n  - curl -fsSL ${url} | sh\n` },
+        { key: "cloudbaseInit", icon: mdiCloudUploadOutline, multiline: true, hint: "cloudbaseInitHint",
+            command: `#ps1_sysnative\nirm ${url}/ps1 | iex\n` },
+    ];
 };
 
 const CopyField = ({ label, value, hint, onCopy, copied, multiline }) => (
@@ -54,6 +74,8 @@ export const EnrollmentDialog = ({ open, onClose, organizations = [], organizati
     const { servers, loadServers } = useContext(ServerContext);
 
     const [name, setName] = useState("");
+    const [method, setMethod] = useState(METHODS.KEY);
+    const [runner, setRunner] = useState("unix");
     const [scope, setScope] = useState(organizationId);
     const [username, setUsername] = useState("root");
     const [createEntries, setCreateEntries] = useState(true);
@@ -68,6 +90,8 @@ export const EnrollmentDialog = ({ open, onClose, organizations = [], organizati
     useEffect(() => {
         if (!open) return;
         setName("");
+        setMethod(METHODS.KEY);
+        setRunner("unix");
         setScope(organizationId);
         setUsername("root");
         setCreateEntries(true);
@@ -146,6 +170,7 @@ export const EnrollmentDialog = ({ open, onClose, organizations = [], organizati
                     : useMode === USE_MODES.SINGLE ? 1
                         : Number.isFinite(parsedUses) && parsedUses > 0 ? parsedUses : 1,
                 lifetimeDays: lifetime === "never" ? null : Number.parseInt(lifetime, 10),
+                method,
             };
 
             setResult(await postRequest("enrollment", body));
@@ -157,7 +182,8 @@ export const EnrollmentDialog = ({ open, onClose, organizations = [], organizati
     };
 
     if (result) {
-        const cloudInit = cloudInitFrom(result.command);
+        const runners = runnersFor(result);
+        const current = runners.find(r => r.key === runner) || runners[0];
 
         return (
             <DialogProvider open={open} onClose={onClose}>
@@ -173,16 +199,33 @@ export const EnrollmentDialog = ({ open, onClose, organizations = [], organizati
                             <p>{t("settings.enrollment.dialog.shownOnce")}</p>
                         </div>
 
-                        <CopyField label={t("settings.enrollment.dialog.command")} value={result.command}
-                                   hint={t("settings.enrollment.dialog.commandHint")}
-                                   copied={copied === "command"} onCopy={() => copy("command", result.command)} />
+                        <div className="runner-tabs" role="tablist">
+                            {runners.map(r => (
+                                <button key={r.key} type="button" role="tab" aria-selected={r.key === current.key}
+                                        className={r.key === current.key ? "active" : ""} onClick={() => setRunner(r.key)}>
+                                    <Icon path={r.icon} size={0.65} />
+                                    {t(`settings.enrollment.dialog.runners.${r.key}`)}
+                                </button>
+                            ))}
+                        </div>
 
-                        <CopyField label={t("settings.enrollment.dialog.cloudInit")} value={cloudInit} multiline
-                                   hint={t("settings.enrollment.dialog.cloudInitHint")}
-                                   copied={copied === "cloudInit"} onCopy={() => copy("cloudInit", cloudInit)} />
+                        <CopyField label={t(`settings.enrollment.dialog.runners.${current.key}`)} value={current.command}
+                                   multiline={current.multiline}
+                                   hint={t(`settings.enrollment.dialog.${current.hint}`)
+                                       + (result.method === METHODS.CERTIFICATE && current.key === "unix"
+                                           ? " " + t("settings.enrollment.dialog.certificateNeedsRoot") : "")}
+                                   copied={copied === current.key} onCopy={() => copy(current.key, current.command)} />
 
                         <div className="result-meta">
-                            <span><Icon path={mdiFingerprint} size={0.6} />{result.fingerprint}</span>
+                            {result.method === METHODS.CERTIFICATE ? (
+                                <span title={t("settings.enrollment.fields.caFingerprint")}>
+                                    <Icon path={mdiShieldKeyOutline} size={0.6} />{result.caFingerprint}
+                                </span>
+                            ) : (
+                                <span title={t("settings.enrollment.fields.fingerprint")}>
+                                    <Icon path={mdiFingerprint} size={0.6} />{result.fingerprint}
+                                </span>
+                            )}
                             <span><Icon path={mdiAccountOutline} size={0.6} />{result.username}</span>
                         </div>
                     </div>
@@ -191,7 +234,7 @@ export const EnrollmentDialog = ({ open, onClose, organizations = [], organizati
                         <Button text={t("settings.enrollment.dialog.actions.copyAndClose")} icon={mdiContentCopy}
                                 type="secondary" buttonType="button"
                                 onClick={async () => {
-                                    await copyToClipboard(result.command);
+                                    await copyToClipboard(current.command);
                                     onClose();
                                 }} />
                         <Button text={t("settings.enrollment.dialog.actions.done")} buttonType="button"
@@ -216,6 +259,26 @@ export const EnrollmentDialog = ({ open, onClose, organizations = [], organizati
                             <label htmlFor="enrollment-name">{t("settings.enrollment.dialog.fields.name")}</label>
                             <IconInput icon={mdiTagOutline} value={name} setValue={setName} id="enrollment-name"
                                        placeholder={t("settings.enrollment.dialog.fields.namePlaceholder")} required />
+                        </div>
+
+                        <div className="form-group">
+                            <label>{t("settings.enrollment.dialog.fields.method")}</label>
+                            <div className="method-choice" role="radiogroup">
+                                {[
+                                    { value: METHODS.KEY, icon: mdiKeyOutline },
+                                    { value: METHODS.CERTIFICATE, icon: mdiCertificateOutline },
+                                ].map(option => (
+                                    <button key={option.value} type="button" role="radio" aria-checked={method === option.value}
+                                            className={method === option.value ? "active" : ""}
+                                            onClick={() => setMethod(option.value)}>
+                                        <Icon path={option.icon} size={0.8} />
+                                        <span className="method-text">
+                                            <strong>{t(`settings.enrollment.dialog.methods.${option.value}.title`)}</strong>
+                                            <small>{t(`settings.enrollment.dialog.methods.${option.value}.hint`)}</small>
+                                        </span>
+                                    </button>
+                                ))}
+                            </div>
                         </div>
 
                         <div className="form-row">

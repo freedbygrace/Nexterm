@@ -8,7 +8,9 @@ const {
     revokeEnrollmentToken,
     getEnrollmentScript,
     completeEnrollment,
+    enrollmentCommands,
 } = require("../controllers/enrollment");
+const { buildPowerShellError } = require("../utils/enrollmentScript");
 const { createEnrollmentValidation, enrollmentReportValidation } = require("../validations/enrollment");
 const logger = require("../utils/logger");
 
@@ -32,7 +34,9 @@ const enrollRateLimiter = rateLimit({
  * @description Generates an SSH key pair and a bootstrap token for it. The private key is stored as an identity and
  * never leaves Nexterm; the token is returned once and yields a shell command that installs the public key on a host
  * and, unless disabled, creates the matching connection. Tokens are scoped to the caller or an organization, expire,
- * and can be limited to a number of uses.
+ * and can be limited to a number of uses. With `method: "certificate"` the script makes sshd trust the scope's SSH
+ * certificate authority instead, and Nexterm signs a short-lived certificate for every connection. The response
+ * carries `commands.unix` (sh, for Linux, macOS and BSD) and `commands.windows` (PowerShell).
  * @tags Enrollment
  * @produces application/json
  * @security BearerAuth
@@ -47,7 +51,9 @@ app.post("/", authenticate, async (req, res) => {
     if (result?.code) return res.status(result.code).json(result);
 
     const origin = `${req.protocol}://${req.get("host")}`;
-    res.json({ ...result, command: `curl -fsSL ${origin}/api/enroll/${result.token} | sh` });
+    const commands = enrollmentCommands(origin, result.token, result.method);
+    // `command` stays for API clients written before the Windows script existed.
+    res.json({ ...result, commands, command: commands.unix });
 });
 
 /**
@@ -112,6 +118,30 @@ publicApp.get("/:token", enrollRateLimiter, async (req, res) => {
     if (result?.code) {
         // Piped into a shell, so the failure has to be legible in a terminal as well.
         res.status(result.code).type("text/plain").send(`#!/bin/sh\necho 'nexterm: ${result.message}' >&2\nexit 1\n`);
+        return;
+    }
+
+    res.type("text/plain").send(result.script);
+});
+
+/**
+ * GET /enroll/{token}/ps1
+ * @summary Enrollment Script (Windows)
+ * @description The PowerShell counterpart of the enrollment script, for OpenSSH on Windows. Run it from an elevated
+ * PowerShell as `irm <url> | iex`. Requires no login: the token is the credential.
+ * @tags Enrollment
+ * @produces text/plain
+ * @param {string} token.path.required - The enrollment token
+ * @return {string} 200 - A PowerShell script
+ * @return {object} 404 - Unknown token
+ * @return {object} 410 - Expired, used up or revoked
+ */
+publicApp.get("/:token/ps1", enrollRateLimiter, async (req, res) => {
+    const origin = `${req.protocol}://${req.get("host")}`;
+    const result = await getEnrollmentScript(req.params.token, origin, "ps1");
+
+    if (result?.code) {
+        res.status(result.code).type("text/plain").send(buildPowerShellError(result.message));
         return;
     }
 

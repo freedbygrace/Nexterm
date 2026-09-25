@@ -11,6 +11,8 @@ module.exports.createEnrollmentValidation = Joi.object({
     /** null = the token never expires. */
     lifetimeDays: Joi.number().integer().min(1).max(365).allow(null).optional(),
     createEntries: Joi.boolean().optional(),
+    /** "key" installs the public key; "certificate" makes sshd trust the scope's SSH certificate authority. */
+    method: Joi.string().valid("key", "certificate").optional(),
 });
 
 /**

@@ -71,6 +71,12 @@ module.exports = db.define("enrollment_tokens", {
         allowNull: true,
     },
     /** Whether a successful enrollment creates (or updates) a server entry. */
+    /** "key": install the public key in authorized_keys. "certificate": trust the scope's SSH CA. */
+    method: {
+        type: Sequelize.STRING,
+        allowNull: false,
+        defaultValue: "key",
+    },
     createEntries: {
         type: Sequelize.BOOLEAN,
         allowNull: false,

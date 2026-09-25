@@ -5,7 +5,9 @@ const Identity = require("../models/Identity");
 const Credential = require("../models/Credential");
 const Entry = require("../models/Entry");
 const { generateSshKeyPair, fingerprint } = require("../utils/sshKeygen");
-const { buildEnrollmentScript } = require("../utils/enrollmentScript");
+const { buildEnrollmentScript, buildEnrollmentPowerShell } = require("../utils/enrollmentScript");
+const SshCertificateAuthority = require("../models/SshCertificateAuthority");
+const { getOrCreateCertificateAuthority } = require("./certificateAuthority");
 const { normalizeServerConfig } = require("../utils/entryProtocols");
 const { hasOrganizationPermission, hasAccountPermission, validateFolderAccess } = require("../utils/permission");
 const { Permission } = require("../permissions/registry");
@@ -20,7 +22,7 @@ const MAX_LIFETIME_DAYS = 365;
 const generateToken = () => crypto.randomBytes(TOKEN_BYTES).toString("base64url");
 
 /** Everything about a token except the secret itself and the private key. */
-const toPublicToken = (token, publicKey, identityDisabled = false) => ({
+const toPublicToken = (token, publicKey, identityDisabled = false, caPublicKey = null) => ({
     id: token.id,
     name: token.name,
     organizationId: token.organizationId,
@@ -34,9 +36,11 @@ const toPublicToken = (token, publicKey, identityDisabled = false) => ({
     createEntries: token.createEntries,
     lastUsedAt: token.lastUsedAt,
     createdAt: token.createdAt,
+    method: token.method || "key",
     // Whether the key this token installed can still open a connection.
     identityDisabled,
     ...(publicKey ? { publicKey, fingerprint: fingerprint(publicKey) } : {}),
+    ...(caPublicKey ? { caPublicKey, caFingerprint: fingerprint(caPublicKey) } : {}),
 });
 
 /** Why a token cannot be used right now, or null when it is usable. */
@@ -54,6 +58,13 @@ const findToken = (where) => EnrollmentToken.findOne({ where, raw: false });
 const publicKeyOf = async (identityId) => {
     const credential = await Credential.findOne({ where: { identityId, type: "ssh-public" } });
     return credential?.secret || null;
+};
+
+/** The CA public key a certificate token makes hosts trust, or null for key tokens. */
+const caPublicKeyOf = async (identityId) => {
+    const identity = await Identity.findByPk(identityId);
+    if (!identity?.certificateAuthorityId) return null;
+    return (await SshCertificateAuthority.findByPk(identity.certificateAuthorityId))?.publicKey || null;
 };
 
 /**
@@ -83,6 +94,10 @@ module.exports.createEnrollmentToken = async (accountId, config) => {
 
     const username = (config.username || "root").trim();
     const name = config.name.trim();
+    const method = config.method === "certificate" ? "certificate" : "key";
+
+    // A certificate token links its identity to the scope's CA: hosts trust the CA, not this key.
+    const authority = method === "certificate" ? await getOrCreateCertificateAuthority(accountId, organizationId) : null;
 
     const identity = await Identity.create({
         name: `${name} (enrollment)`,
@@ -90,6 +105,7 @@ module.exports.createEnrollmentToken = async (accountId, config) => {
         username,
         accountId: organizationId ? null : accountId,
         organizationId,
+        certificateAuthorityId: authority ? authority.id : null,
     });
 
     const keyPair = generateSshKeyPair({ comment: `nexterm-${identity.id}` });
@@ -109,6 +125,7 @@ module.exports.createEnrollmentToken = async (accountId, config) => {
         maxUses: config.maxUses === undefined ? 1 : config.maxUses,
         expiresAt: lifetimeDays === null ? null : new Date(Date.now() + lifetimeDays * 24 * 60 * 60 * 1000),
         createEntries: config.createEntries !== false,
+        method,
     });
 
     await createAuditLog({
@@ -123,7 +140,7 @@ module.exports.createEnrollmentToken = async (accountId, config) => {
     logger.info("Enrollment token created", { accountId, organizationId, tokenId: token.id, identityId: identity.id });
 
     // The secret is returned exactly once, when it is created.
-    return { ...toPublicToken(token, keyPair.publicKey), token: token.token };
+    return { ...toPublicToken(token, keyPair.publicKey, false, authority?.publicKey || null), token: token.token };
 };
 
 module.exports.listEnrollmentTokens = async (accountId, organizationId = null) => {
@@ -135,8 +152,9 @@ module.exports.listEnrollmentTokens = async (accountId, organizationId = null) =
     const identities = await Identity.findAll({ where: { id: { [Op.in]: tokens.map(t => t.identityId) } } });
     const disabledById = new Map(identities.map(i => [i.id, !!i.disabled]));
 
-    return Promise.all(tokens.map(async token =>
-        toPublicToken(token, await publicKeyOf(token.identityId), disabledById.get(token.identityId) === true)));
+    return Promise.all(tokens.map(async token => toPublicToken(token, await publicKeyOf(token.identityId),
+        disabledById.get(token.identityId) === true,
+        token.method === "certificate" ? await caPublicKeyOf(token.identityId) : null)));
 };
 
 /**
@@ -179,22 +197,42 @@ module.exports.revokeEnrollmentToken = async (accountId, tokenId, options = {}) 
     return { success: true, identityDisabled: disableIdentity };
 };
 
-/** Serves the shell script for a token, or an error when the token cannot be used. */
-module.exports.getEnrollmentScript = async (tokenValue, origin) => {
+/**
+ * Serves a token's script, or an error when the token cannot be used.
+ *
+ * @param {"sh"|"ps1"} platform POSIX sh (Linux, macOS, BSD) or PowerShell (Windows)
+ */
+module.exports.getEnrollmentScript = async (tokenValue, origin, platform = "sh") => {
     const token = await findToken({ token: tokenValue });
     const reason = tokenUnusableReason(token);
     if (reason) return { code: token ? 410 : 404, message: reason };
 
-    const publicKey = await publicKeyOf(token.identityId);
-    if (!publicKey) return { code: 500, message: "Enrollment key is missing" };
+    const method = token.method || "key";
+    const publicKey = method === "key" ? await publicKeyOf(token.identityId) : null;
+    const caPublicKey = method === "certificate" ? await caPublicKeyOf(token.identityId) : null;
+    if (method === "key" && !publicKey) return { code: 500, message: "Enrollment key is missing" };
+    if (method === "certificate" && !caPublicKey) return { code: 500, message: "Certificate authority is missing" };
 
+    const build = platform === "ps1" ? buildEnrollmentPowerShell : buildEnrollmentScript;
     return {
-        script: buildEnrollmentScript({
+        script: build({
+            method,
             publicKey,
+            caPublicKey,
             callbackUrl: `${origin}/api/enroll/${token.token}/callback`,
             username: token.username,
             createEntries: token.createEntries,
         }),
+    };
+};
+
+/** The commands that run a token's script, per platform. */
+module.exports.enrollmentCommands = (origin, tokenValue, method = "key") => {
+    const url = `${origin}/api/enroll/${tokenValue}`;
+    return {
+        // Trusting a CA edits sshd_config, so that script always needs root.
+        unix: `curl -fsSL ${url} | ${method === "certificate" ? "sudo sh" : "sh"}`,
+        windows: `irm ${url}/ps1 | iex`,
     };
 };
 

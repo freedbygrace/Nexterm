@@ -22,7 +22,9 @@ dependencies:
   flutter_material_design_icons: ^3.1.0
   url_launcher: ^6.2.5
   dynamic_color: ^1.8.1
-  native_glass_navbar: ^1.0.1
+  # 1.1+ uses iOS 26 SDK APIs (UITab.selectedImage, prominentTabIdentifier) the release runner cannot build;
+  # pubspec.lock is not committed, so the version is pinned here.
+  native_glass_navbar: 1.0.3
   guacamole_common_dart:
     path: packages/guacamole_common_dart
   file_picker: ^8.0.0

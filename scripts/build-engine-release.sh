@@ -154,7 +154,9 @@ build_libvnc() {
     cd "libvncserver-LibVNCServer-${LIBVNC_VERSION}"
     patch -p1 < "$REPO_ROOT/vendor/patches/libvncclient-accept-screen-id-zero.patch"
 
+    # libvncserver 0.9.15 asks for CMake < 3.5 compatibility, which CMake 4 no longer offers.
     cmake -B build \
+        -DCMAKE_POLICY_VERSION_MINIMUM=3.5 \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_INSTALL_PREFIX="$LIBVNC_DIST" \
         -DWITH_EXAMPLES=OFF \

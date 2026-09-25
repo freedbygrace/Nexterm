@@ -4,7 +4,7 @@ import Icon from "@mdi/react";
 import {
     mdiFile, mdiFolder, mdiAlertCircle, mdiFormTextbox, mdiTextBoxEdit,
     mdiFileDownload, mdiTrashCan, mdiEye, mdiFileMove, mdiContentCopy,
-    mdiInformationOutline, mdiConsole, mdiFileSearchOutline, mdiFilePlus, mdiFolderPlus,
+    mdiInformationOutline, mdiConsole, mdiFileSearchOutline, mdiFilePlus, mdiFolderPlus, mdiKeyboard,
 } from "@mdi/js";
 import { ContextMenu, ContextMenuItem, ContextMenuSeparator, useContextMenu } from "@/common/components/ContextMenu";
 import { ActionConfirmDialog } from "@/common/components/ActionConfirmDialog/ActionConfirmDialog.jsx";

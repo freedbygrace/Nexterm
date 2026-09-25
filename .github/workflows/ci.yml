@@ -77,6 +77,11 @@ jobs:
         working-directory: client
         run: yarn install --frozen-lockfile
 
+      # Undefined identifiers crash at runtime and the bundler lets them through.
+      - name: Lint for runtime errors
+        working-directory: client
+        run: yarn lint:runtime
+
       - name: Build
         working-directory: client
         run: yarn build

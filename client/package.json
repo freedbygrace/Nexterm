@@ -6,6 +6,7 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
+    "lint:runtime": "eslint -c eslint.runtime.config.js src",
     "preview": "vite preview"
   },
   "dependencies": {

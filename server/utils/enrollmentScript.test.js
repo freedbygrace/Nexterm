@@ -103,3 +103,66 @@ describe("enrollment script behaviour", { skip: shell ? false : "no POSIX shell 
         fs.rmSync(dir, { recursive: true, force: true });
     });
 });
+
+describe("certificate enrollment script", () => {
+    const { buildEnrollmentScript: build } = require("./enrollmentScript");
+    const CA_KEY = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAItest nexterm-user-ca";
+    const text = build({ method: "certificate", caPublicKey: CA_KEY, callbackUrl: "https://n.example/cb", username: "deploy", createEntries: true });
+
+    it("carries the CA and no user key", () => {
+        assert.ok(text.includes(`CA_KEY='${CA_KEY}'`));
+        assert.ok(!text.includes("PUBLIC_KEY="));
+        assert.ok(!text.includes("authorized_keys"));
+    });
+
+    it("extends an existing TrustedUserCAKeys instead of shadowing it", () => {
+        // sshd uses the first occurrence only; a second directive would silently be ignored.
+        assert.match(text, /-T -f "\$SSHD_CONFIG"/);
+        assert.match(text, /tolower\(\$1\) == "trustedusercakeys"/);
+    });
+
+    it("validates sshd's configuration and restores it on failure", () => {
+        assert.match(text, /-t -f "\$SSHD_CONFIG"/);
+        assert.match(text, /cp "\$SSHD_CONFIG\.nexterm\.bak" "\$SSHD_CONFIG"/);
+    });
+
+    it("is valid sh", { skip: shell ? false : "no POSIX shell available" }, () => {
+        const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "nexterm-ca-")), "ca.sh");
+        fs.writeFileSync(file, text);
+        execFileSync(shell, ["-n", file]);
+    });
+});
+
+describe("Windows enrollment script", () => {
+    const { buildEnrollmentPowerShell, buildPowerShellError } = require("./enrollmentScript");
+    const ps = (overrides = {}) => buildEnrollmentPowerShell({
+        publicKey: PUBLIC_KEY, callbackUrl: "https://n.example/cb", username: "Administrator", createEntries: true, ...overrides,
+    });
+
+    it("runs in a script block and never exits the caller's shell", () => {
+        const text = ps();
+        assert.ok(text.includes("& {"));
+        assert.ok(!/^\s*exit\b/m.test(text));
+    });
+
+    it("keeps an injected quote inside the string", () => {
+        const text = ps({ username: "x'; Remove-Item C:\ -Recurse; '" });
+        const line = text.split("\n").find(l => l.trim().startsWith("$TargetUser ="));
+        assert.equal(line.trim(), `$TargetUser = 'x''; Remove-Item C:\ -Recurse; '''`);
+    });
+
+    it("installs a key or trusts the CA depending on the method", () => {
+        assert.match(ps(), /administrators_authorized_keys/);
+        const ca = ps({ method: "certificate", publicKey: undefined, caPublicKey: "ssh-ed25519 AAAAC3 ca" });
+        assert.match(ca, /TrustedUserCAKeys/);
+        assert.ok(!ca.includes("administrators_authorized_keys"));
+    });
+
+    it("writes files without a byte-order mark", () => {
+        assert.match(ps(), /UTF8Encoding\(\$false\)/);
+    });
+
+    it("reports a failing token without closing the window", () => {
+        assert.equal(buildPowerShellError("it's revoked"), "Write-Host 'nexterm: it''s revoked' -ForegroundColor Red\n");
+    });
+});

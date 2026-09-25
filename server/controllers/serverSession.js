@@ -8,11 +8,21 @@ const { validateEntryAccess } = require("./entry");
 const { getIdentityCredentials, getIdentity } = require("./identity");
 const { getOrganizationAuditSettingsInternal, createAuditLog, AUDIT_ACTIONS, RESOURCE_TYPES } = require("./audit");
 const { resolveIdentity } = require("../utils/identityResolver");
-const { resolveSessionProtocol, getRendererForProtocol, getPrimaryProtocol } = require("../utils/entryProtocols");
+const { resolveSessionProtocol, getRendererForProtocol, getPrimaryProtocol, FILE_PROTOCOLS } = require("../utils/entryProtocols");
 const { Permission } = require("../permissions/registry");
 const Organization = require('../models/Organization');
 const logger = require("../utils/logger");
 const stateBroadcaster = require("../lib/StateBroadcaster");
+
+/** Values of a session's `type` the client renders by (terminal, file manager, remote browser). */
+const RENDERER_OVERRIDES = new Set(["sftp", "web", "terminal"]);
+
+/**
+ * The `type` a session keeps: a renderer override, or "sftp" for a file protocol, else null. Clients send
+ * the protocol name in the same request field ("ssh", "rdp"), which is not a renderer.
+ */
+const sessionTypeFor = (requestedType, protocol) =>
+    RENDERER_OVERRIDES.has(requestedType) ? requestedType : (FILE_PROTOCOLS.has(protocol) ? "sftp" : null);
 
 const ENTRY_TYPE_TO_AUDIT_ACTION = {
     'ssh': AUDIT_ACTIONS.SSH_CONNECT,
@@ -131,9 +141,10 @@ const createSession = async (accountId, entryId, identityId, connectionReason, t
 
     const configuration = {
         identityId: identity ? identity.id : null,
-        // `type` keeps its historical meaning for the client (renderer override: "sftp" / "web"),
-        // `protocol` is the resolved protocol this session runs over.
-        type: type || null,
+        // `type` keeps its historical meaning for the client (renderer override: "sftp" / "web" /
+        // "terminal"), `protocol` is the resolved protocol this session runs over. Clients send a
+        // protocol name in the same request field, which must not come back as a renderer.
+        type: sessionTypeFor(type, protocol),
         protocol,
         directIdentity: directIdentity || null,
         scriptId: scriptId || null,
@@ -462,4 +473,4 @@ const pasteIdentityPassword = async (accountId, sessionId, ipAddress = null, use
     }
 };
 
-module.exports = { createSession, getSessions, getGroups, getConnectionsState, getSession, hibernateSession, resumeSession, deleteSession, startSharing, stopSharing, updateSharePermissions, duplicateSession, pasteIdentityPassword, createGroup, updateGroup, deleteGroup, moveSessionToGroup };
+module.exports = { createSession, sessionTypeFor, getSessions, getGroups, getConnectionsState, getSession, hibernateSession, resumeSession, deleteSession, startSharing, stopSharing, updateSharePermissions, duplicateSession, pasteIdentityPassword, createGroup, updateGroup, deleteGroup, moveSessionToGroup };

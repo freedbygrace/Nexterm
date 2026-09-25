@@ -23,6 +23,9 @@ import { StateStreamContext, STATE_TYPES } from "@/common/contexts/StateStreamCo
 import { isTauri } from "@/common/utils/TauriUtil.js";
 import { getTabId, getBrowserId, requiresIdentity, canConnectWithoutPrompt } from "@/common/utils/ConnectionUtil.js";
 import { getRendererForProtocol, getSessionTypeForProtocol, getPrimaryProtocol } from "@/common/utils/ProtocolUtil.js";
+
+/** Session types the view renders by (terminal, file manager, remote browser); see ViewContainer. */
+const RENDERER_OVERRIDES = ["sftp", "web", "terminal"];
 import { postRequest, deleteRequest, patchRequest, getRequest } from "@/common/utils/RequestUtil";
 
 let reconnectKeySeq = 0;
@@ -119,7 +122,9 @@ export const Servers = () => {
                 identity: session.configuration.identityId,
                 isHibernated: session.isHibernated,
                 lastActivity: session.lastActivity,
-                type: session.configuration.type || undefined,
+                // Only a renderer override counts; servers before 1.5.2 also stored the protocol name here.
+                type: RENDERER_OVERRIDES.includes(session.configuration.type) ? session.configuration.type
+                    : getSessionTypeForProtocol(session.configuration.protocol) || undefined,
                 protocol: session.configuration.protocol || undefined,
                 organizationId: session.organizationId,
                 organizationName: session.organizationName,

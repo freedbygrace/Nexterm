@@ -247,3 +247,59 @@ describe("certificate authority", () => {
         assert.equal(creds["ssh-cert"], undefined);
     });
 });
+
+describe("organization certificate authority permissions", () => {
+    const { generateSshKeyPair } = require("./sshKeygen");
+    let memberId;
+    let organizationId;
+
+    before(async () => {
+        const Account = require("../models/Account");
+        const Organization = require("../models/Organization");
+        const OrganizationMember = require("../models/OrganizationMember");
+        const member = await Account.create({
+            username: "member", password: "$2b$10$0000000000000000000000000000000000000000000000000000",
+            firstName: "Org", lastName: "Member", role: "user",
+        });
+        memberId = member.id;
+        const organization = await Organization.create({ name: "ca-org" });
+        organizationId = organization.id;
+        await OrganizationMember.create({ organizationId, accountId: memberId, role: "member", status: "active", invitedBy: accountId });
+        await OrganizationMember.create({ organizationId, accountId, role: "owner", status: "active", invitedBy: accountId });
+    });
+
+    const newIdentity = (who, overrides = {}) => identityController.createIdentity(who, {
+        name: `org-${Date.now()}-${Math.random()}`, username: "root", type: "ssh",
+        sshKey: generateSshKeyPair({ modulusLength: 2048 }).privateKey, organizationId, ...overrides,
+    });
+
+    it("lets a member manage identities but not link them to the CA", async () => {
+        const plain = await newIdentity(memberId);
+        assert.ok(plain.id, "a plain organization identity is fine");
+
+        const linked = await newIdentity(memberId, { useCertificateAuthority: true });
+        assert.equal(linked.code, 403);
+
+        const update = await identityController.updateIdentity(memberId, plain.id, { useCertificateAuthority: true });
+        assert.equal(update.code, 403);
+    });
+
+    it("stops a member renaming a linked identity, which would change the certificate's principal", async () => {
+        const linked = await newIdentity(accountId, { useCertificateAuthority: true });
+        assert.ok(linked.id, "an owner may link");
+
+        const rename = await identityController.updateIdentity(memberId, linked.id, { username: "admin" });
+        assert.equal(rename.code, 403);
+
+        const harmless = await identityController.updateIdentity(memberId, linked.id, { name: "renamed label only" });
+        assert.equal(harmless.success, true);
+    });
+
+    it("keeps certificate enrollment tokens to those who manage the organization", async () => {
+        const denied = await enrollmentController.createEnrollmentToken(memberId, { name: "m", organizationId, method: "certificate" });
+        assert.equal(denied.code, 403);
+
+        const keyToken = await enrollmentController.createEnrollmentToken(memberId, { name: "m2", organizationId, method: "key" });
+        assert.ok(keyToken.token, "key tokens are unchanged");
+    });
+});

@@ -7,7 +7,7 @@ const OrganizationMember = require("../models/OrganizationMember");
 const { Op } = require("sequelize");
 const logger = require("../utils/logger");
 const stateBroadcaster = require("../lib/StateBroadcaster");
-const { getOrCreateCertificateAuthority, issueCertificate } = require("./certificateAuthority");
+const { getOrCreateCertificateAuthority, issueCertificate, canUseCertificateAuthority, CA_PERMISSION_MESSAGE } = require("./certificateAuthority");
 const { publicKeyFromPrivate } = require("../utils/sshKeygen");
 
 const validateAccess = async (accountId, identity) => {
@@ -123,6 +123,9 @@ module.exports.createIdentity = async (accountId, config) => {
         return { code: 400, message: "settings.identities.dialog.messages.sshKeyRequired" };
     }
 
+    if (config.useCertificateAuthority && !(await canUseCertificateAuthority(accountId, config.organizationId)))
+        return { code: 403, message: CA_PERMISSION_MESSAGE };
+
     const identity = await Identity.create({
         ...config, accountId: config.organizationId ? null : accountId, organizationId: config.organizationId || null,
         password: undefined, sshKey: undefined, passphrase: undefined, sshCertificate: undefined,
@@ -158,6 +161,13 @@ module.exports.updateIdentity = async (accountId, identityId, config) => {
     if (!check.valid) return check.error;
 
     const { password, sshKey, passphrase, sshCertificate, useCertificateAuthority, accountId: _, organizationId: __, certificateAuthorityId: ___, ...updateConfig } = config;
+
+    // Linking to the CA, or renaming a linked identity (the name is the certificate's principal).
+    const linking = useCertificateAuthority === true && !identity.certificateAuthorityId;
+    const renamingLinked = Boolean(identity.certificateAuthorityId || useCertificateAuthority)
+        && updateConfig.username !== undefined && updateConfig.username !== identity.username;
+    if ((linking || renamingLinked) && !(await canUseCertificateAuthority(accountId, identity.organizationId)))
+        return { code: 403, message: CA_PERMISSION_MESSAGE };
     if (updateConfig.disabled !== undefined) updateConfig.disabled = !!updateConfig.disabled;
     await Identity.update(updateConfig, { where: { id: identityId, ...(identity.organizationId ? { organizationId: identity.organizationId } : { accountId }) } });
 

@@ -7,7 +7,7 @@ const Entry = require("../models/Entry");
 const { generateSshKeyPair, fingerprint } = require("../utils/sshKeygen");
 const { buildEnrollmentScript, buildEnrollmentPowerShell } = require("../utils/enrollmentScript");
 const SshCertificateAuthority = require("../models/SshCertificateAuthority");
-const { getOrCreateCertificateAuthority } = require("./certificateAuthority");
+const { getOrCreateCertificateAuthority, canUseCertificateAuthority, CA_PERMISSION_MESSAGE } = require("./certificateAuthority");
 const { normalizeServerConfig } = require("../utils/entryProtocols");
 const { hasOrganizationPermission, hasAccountPermission, validateFolderAccess } = require("../utils/permission");
 const { Permission } = require("../permissions/registry");
@@ -95,6 +95,8 @@ module.exports.createEnrollmentToken = async (accountId, config) => {
     const username = (config.username || "root").trim();
     const name = config.name.trim();
     const method = config.method === "certificate" ? "certificate" : "key";
+    if (method === "certificate" && !(await canUseCertificateAuthority(accountId, organizationId)))
+        return { code: 403, message: CA_PERMISSION_MESSAGE };
 
     // A certificate token links its identity to the scope's CA: hosts trust the CA, not this key.
     const authority = method === "certificate" ? await getOrCreateCertificateAuthority(accountId, organizationId) : null;

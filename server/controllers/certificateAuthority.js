@@ -1,7 +1,8 @@
 const SshCertificateAuthority = require("../models/SshCertificateAuthority");
 const { generateCaKeyPair, signUserCertificate } = require("../utils/sshCertificate");
 const { fingerprint } = require("../utils/sshKeygen");
-const { hasOrganizationAccess } = require("../utils/permission");
+const { hasOrganizationAccess, hasOrganizationPermission } = require("../utils/permission");
+const { Permission } = require("../permissions/registry");
 const logger = require("../utils/logger");
 
 /** How long a certificate signed for one connection stays valid. */
@@ -57,6 +58,20 @@ module.exports.getCertificateAuthority = async (accountId, organizationId = null
 };
 
 module.exports.toPublicAuthority = toPublicAuthority;
+
+/**
+ * Whether the caller may mint access through a scope's CA.
+ *
+ * A host that trusts an organization's CA accepts a certificate for any user name the CA signs. So
+ * whoever links an identity to it, renames a linked identity (its name is the certificate's
+ * principal), or creates a certificate enrollment token can reach every such host - without anything
+ * being installed on them. In an organization that takes the right to manage the organization, not
+ * just its identities. A personal CA is its owner's alone.
+ */
+module.exports.canUseCertificateAuthority = async (accountId, organizationId) =>
+    !organizationId || hasOrganizationPermission(accountId, organizationId, Permission.ORG_MANAGE);
+
+module.exports.CA_PERMISSION_MESSAGE = "Using the organization's certificate authority requires permission to manage the organization";
 
 /**
  * Signs a certificate for one connection: valid for minutes, for the identity's user name only.

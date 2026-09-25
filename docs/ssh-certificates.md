@@ -31,6 +31,10 @@ Keep in mind what trusting a CA means: a host that trusts the organization's CA 
 *any* identity in that organization whose user name exists on the host. Use separate organizations, or
 per-host `AuthorizedPrincipalsFile`, where that is too broad.
 
+That is why, in an organization, linking an identity to the CA, changing the user name of a linked identity
+(it is the certificate's principal) and creating certificate enrollment tokens require **Manage Organization**,
+not just *Manage Identities*. A personal CA is only ever used by its owner.
+
 ## Your own certificates
 
 An OpenSSH user certificate paired with its matching private key. The certificate is uploaded separately from the private key and is used as a companion to it; the existing SSH key and password authentication modes remain unchanged.

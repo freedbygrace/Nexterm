@@ -253,7 +253,11 @@ module.exports.completeEnrollment = async (tokenValue, report, requestIp) => {
     // The address the host reported, falling back to where the request came from.
     const address = (report.address || "").trim() || (requestIp || "").replace(/^::ffff:/, "");
     const name = (report.hostname || "").trim() || address || `host-${Date.now()}`;
-    const port = Number.isInteger(report.port) && report.port > 0 && report.port <= 65535 ? report.port : 22;
+    const validPort = (value) => Number.isInteger(value) && value > 0 && value <= 65535;
+    const port = validPort(report.port) ? report.port : 22;
+    // Remote Desktop the host found listening. The enrollment key cannot log in over RDP, so its
+    // credentials are asked for on connect (or set on the entry afterwards).
+    const rdpPort = validPort(report.rdpPort) ? report.rdpPort : null;
 
     await token.update({ uses: token.uses + 1, lastUsedAt: new Date() });
 
@@ -264,11 +268,12 @@ module.exports.completeEnrollment = async (tokenValue, report, requestIp) => {
 
     if (!address) return { code: 400, message: "No address to create a connection with" };
 
-    const config = normalizeServerConfig({
-        ip: address,
-        protocol: "ssh",
-        protocols: { ssh: { enabled: true, port }, sftp: { enabled: true, port } },
-    }, { type: "server" });
+    const detected = {
+        ssh: { enabled: true, port },
+        sftp: { enabled: true, port },
+        ...(rdpPort ? { rdp: { enabled: true, port: rdpPort } } : {}),
+    };
+    const config = normalizeServerConfig({ ip: address, protocol: "ssh", protocols: detected }, { type: "server" });
 
     const existing = await Entry.findOne({
         raw: false,
@@ -281,13 +286,24 @@ module.exports.completeEnrollment = async (tokenValue, report, requestIp) => {
     });
 
     if (existing) {
-        await existing.update({ config: { ...existing.config, ...config } });
+        // Merged per protocol: what was detected is switched on with its current port, anything added by
+        // hand stays, and so do per-protocol identities and the chosen primary protocol.
+        const current = existing.config || {};
+        const protocols = { ...(current.protocols || {}) };
+        for (const [key, value] of Object.entries(detected)) protocols[key] = { ...(protocols[key] || {}), ...value };
+        const merged = normalizeServerConfig({
+            ...current,
+            ip: address,
+            protocol: current.protocol || "ssh",
+            protocols,
+        }, { type: "server" });
+        await existing.update({ config: merged });
         await require("../models/EntryIdentity").findOrCreate({
             where: { entryId: existing.id, identityId: token.identityId },
             defaults: { entryId: existing.id, identityId: token.identityId, isDefault: false },
         });
         stateBroadcaster.broadcast("ENTRIES", { accountId: token.accountId, organizationId: token.organizationId });
-        logger.info("Host re-enrolled", { tokenId: token.id, entryId: existing.id, name });
+        logger.info("Host re-enrolled", { tokenId: token.id, entryId: existing.id, name, rdp: Boolean(rdpPort) });
         return { success: true, entryId: existing.id, message: "Connection updated" };
     }
 

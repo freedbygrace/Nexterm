@@ -142,6 +142,16 @@ OS_VALUE=$( (. /etc/os-release 2>/dev/null && printf '%s' "\${PRETTY_NAME:-}") |
 SSH_PORT=$(awk 'tolower($1) == "port" && $2 ~ /^[0-9]+$/ {print $2; exit}' /etc/ssh/sshd_config 2>/dev/null || true)
 [ -n "\${SSH_PORT:-}" ] || SSH_PORT=22
 
+# Remote Desktop (xrdp) when something is actually listening for it, so the connection gets RDP too.
+RDP_PORT=$(grep -E '^[[:space:]]*port[[:space:]]*=' /etc/xrdp/xrdp.ini 2>/dev/null | head -n1 | grep -oE '[0-9]{2,5}' | tail -n1 || true)
+[ -n "\${RDP_PORT:-}" ] || RDP_PORT=3389
+RDP_JSON=
+if { ss -ltn 2>/dev/null | awk '{print $4}'; netstat -an 2>/dev/null | awk '/LISTEN/ {print $4}'; } \\
+        | grep -Eq "[:.]$RDP_PORT\\$"; then
+    RDP_JSON=",\\"rdpPort\\":$RDP_PORT"
+    log "RDP found on port $RDP_PORT"
+fi
+
 # Address the target would be reached on; falls back to the first non-loopback address.
 ADDRESS=$(ip route get 1.1.1.1 2>/dev/null | awk '{for (i=1;i<=NF;i++) if ($i=="src") {print $(i+1); exit}}' || true)
 [ -n "\${ADDRESS:-}" ] || ADDRESS=$(hostname -I 2>/dev/null | awk '{print $1}' || true)
@@ -149,8 +159,8 @@ ADDRESS=$(ip route get 1.1.1.1 2>/dev/null | awk '{for (i=1;i<=NF;i++) if ($i=="
 
 # JSON-escape what the host reports about itself.
 json() { printf '%s' "$1" | sed 's/\\\\/\\\\\\\\/g; s/"/\\\\"/g' | tr -d '\\000-\\037'; }
-PAYLOAD=$(printf '{"hostname":"%s","address":"%s","os":"%s","port":%s,"username":"%s"}' \\
-    "$(json "$HOSTNAME_VALUE")" "$(json "\${ADDRESS:-}")" "$(json "$OS_VALUE")" "$SSH_PORT" "$(json "$TARGET_USER")")
+PAYLOAD=$(printf '{"hostname":"%s","address":"%s","os":"%s","port":%s,"username":"%s"%s}' \\
+    "$(json "$HOSTNAME_VALUE")" "$(json "\${ADDRESS:-}")" "$(json "$OS_VALUE")" "$SSH_PORT" "$(json "$TARGET_USER")" "$RDP_JSON")
 
 if command -v curl >/dev/null 2>&1; then
     RESPONSE=$(curl -fsS -X POST -H 'Content-Type: application/json' -d "$PAYLOAD" "$CALLBACK_URL") || {
@@ -358,13 +368,25 @@ ${certificate ? PS_TRUST_CA : PS_INSTALL_KEY}
         if (-not $address) {
             $address = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -notmatch '^(127|169\\.254)\\.' } | Select-Object -First 1).IPAddress
         }
-        $report = @{
+        $reportData = @{
             hostname = $env:COMPUTERNAME
             address = "$address"
             os = (Get-CimInstance Win32_OperatingSystem).Caption
             port = $port
             username = $TargetUser
-        } | ConvertTo-Json -Compress
+        }
+
+        # Remote Desktop, when it is enabled and actually listening, so the connection gets RDP too.
+        $terminalServer = 'HKLM:\\System\\CurrentControlSet\\Control\\Terminal Server'
+        if ((Get-ItemProperty $terminalServer -ErrorAction SilentlyContinue).fDenyTSConnections -eq 0) {
+            $rdpPort = (Get-ItemProperty "$terminalServer\\WinStations\\RDP-Tcp" -ErrorAction SilentlyContinue).PortNumber
+            if (-not $rdpPort) { $rdpPort = 3389 }
+            if (Get-NetTCPConnection -LocalPort $rdpPort -State Listen -ErrorAction SilentlyContinue) {
+                $reportData.rdpPort = [int]$rdpPort
+                Log "RDP found on port $rdpPort"
+            }
+        }
+        $report = $reportData | ConvertTo-Json -Compress
 
         [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
         $response = Invoke-RestMethod -Method Post -Uri $CallbackUrl -ContentType 'application/json' -Body $report

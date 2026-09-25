@@ -24,5 +24,7 @@ module.exports.enrollmentReportValidation = Joi.object({
     address: Joi.string().trim().max(255).allow("").optional(),
     os: Joi.string().trim().max(200).allow("").optional(),
     port: Joi.number().integer().min(1).max(65535).optional(),
+    /** Set when the host has RDP listening (Windows Remote Desktop, xrdp). */
+    rdpPort: Joi.number().integer().min(1).max(65535).optional(),
     username: Joi.string().trim().max(64).allow("").optional(),
 }).unknown(false);

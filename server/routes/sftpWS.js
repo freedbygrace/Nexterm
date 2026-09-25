@@ -219,7 +219,15 @@ module.exports = async (ws, req) => {
         sftpClient.on("close", onSftpClose);
 
         const capabilities = getCapabilities(entry, SessionManager.get(sessionId));
-        const storedPath = SessionManager.getSftpPath(sessionId);
+        // Where a shared session already is, else where the session was asked to open (the file panel
+        // beside a terminal passes the shell's directory).
+        let storedPath = SessionManager.getSftpPath(sessionId);
+        const startPath = SessionManager.get(sessionId)?.configuration?.startPath;
+        if (!storedPath && typeof startPath === "string" && startPath.startsWith("/")
+            && startPath.length <= 4096 && !/[\r\n\x00]/.test(startPath)) {
+            storedPath = startPath;
+            SessionManager.setSftpPath(sessionId, startPath);
+        }
         sendResult(ws, OP.READY, { path: storedPath, capabilities });
 
         const logAudit = (action, resource, details) => {

@@ -7,6 +7,8 @@ const OrganizationMember = require("../models/OrganizationMember");
 const { Op } = require("sequelize");
 const logger = require("../utils/logger");
 const stateBroadcaster = require("../lib/StateBroadcaster");
+const { getOrCreateCertificateAuthority, issueCertificate } = require("./certificateAuthority");
+const { publicKeyFromPrivate } = require("../utils/sshKeygen");
 
 const validateAccess = async (accountId, identity) => {
     if (!identity) return { valid: false, error: { code: 501, message: "Identity does not exist" } };
@@ -59,7 +61,26 @@ const syncCredentials = async (identityId, type, password, sshKey, passphrase, s
 
 module.exports.getIdentityCredentials = async (identityId) => {
     const creds = await Credential.findAll({ where: { identityId } });
-    return creds.reduce((acc, c) => ({ ...acc, [c.type]: c.secret }), {});
+    const result = creds.reduce((acc, c) => ({ ...acc, [c.type]: c.secret }), {});
+
+    // A CA-linked identity stores no certificate: one valid for minutes is signed per connection.
+    const identity = await Identity.findByPk(identityId);
+    if (identity?.certificateAuthorityId && result["ssh-key"]) {
+        const publicKey = result["ssh-public"] || publicKeyFromPrivate(result["ssh-key"], result.passphrase);
+        const certificate = await issueCertificate(identity, publicKey);
+        if (certificate) result["ssh-cert"] = certificate;
+    }
+
+    return result;
+};
+
+/** Links an identity to its scope's CA (created on first use), or unlinks it. */
+const applyCertificateAuthority = async (accountId, identity, enabled) => {
+    if (enabled === undefined) return;
+    const authorityId = enabled
+        ? (await getOrCreateCertificateAuthority(accountId, identity.organizationId || null)).id
+        : null;
+    await Identity.update({ certificateAuthorityId: authorityId }, { where: { id: identity.id } });
 };
 
 module.exports.listIdentities = async (accountId) => {
@@ -68,7 +89,7 @@ module.exports.listIdentities = async (accountId) => {
     const orgIds = memberships.map(m => m.organizationId);
     const org = orgIds.length ? await Identity.findAll({ where: { organizationId: { [Op.in]: orgIds } } }) : [];
     
-    const format = (i, scope) => ({ id: i.id, name: i.name, type: i.type, username: i.username, organizationId: i.organizationId, accountId: i.accountId, disabled: !!i.disabled, scope });
+    const format = (i, scope) => ({ id: i.id, name: i.name, type: i.type, username: i.username, organizationId: i.organizationId, accountId: i.accountId, disabled: !!i.disabled, useCertificateAuthority: Boolean(i.certificateAuthorityId), scope });
     return [...personal.map(i => format(i, 'personal')), ...org.map(i => format(i, 'organization'))];
 };
 
@@ -105,8 +126,10 @@ module.exports.createIdentity = async (accountId, config) => {
     const identity = await Identity.create({
         ...config, accountId: config.organizationId ? null : accountId, organizationId: config.organizationId || null,
         password: undefined, sshKey: undefined, passphrase: undefined, sshCertificate: undefined,
+        useCertificateAuthority: undefined, certificateAuthorityId: undefined,
     });
     await syncCredentials(identity.id, config.type, config.password, config.sshKey, config.passphrase, config.sshCertificate);
+    await applyCertificateAuthority(accountId, identity, config.useCertificateAuthority);
     logger.info("Identity created", { identityId: identity.id, name: identity.name, scope: config.organizationId ? 'organization' : 'personal' });
 
     stateBroadcaster.broadcast("IDENTITIES", { accountId, organizationId: config.organizationId });
@@ -134,12 +157,13 @@ module.exports.updateIdentity = async (accountId, identityId, config) => {
     const check = await validateManageAccess(accountId, identity);
     if (!check.valid) return check.error;
 
-    const { password, sshKey, passphrase, sshCertificate, accountId: _, organizationId: __, ...updateConfig } = config;
+    const { password, sshKey, passphrase, sshCertificate, useCertificateAuthority, accountId: _, organizationId: __, certificateAuthorityId: ___, ...updateConfig } = config;
     if (updateConfig.disabled !== undefined) updateConfig.disabled = !!updateConfig.disabled;
     await Identity.update(updateConfig, { where: { id: identityId, ...(identity.organizationId ? { organizationId: identity.organizationId } : { accountId }) } });
 
     const effectiveType = config.type || identity.type;
     await syncCredentials(identityId, effectiveType, password, sshKey, passphrase, sshCertificate);
+    await applyCertificateAuthority(accountId, identity, useCertificateAuthority);
     logger.info("Identity updated", { identityId, name: identity.name, ...(updateConfig.disabled !== undefined ? { disabled: updateConfig.disabled } : {}) });
 
     stateBroadcaster.broadcast("IDENTITIES", { accountId, organizationId: identity.organizationId });

@@ -71,3 +71,19 @@ module.exports.fingerprint = (publicKeyLine) => {
     const digest = crypto.createHash("sha256").update(blob).digest("base64").replace(/=+$/, "");
     return `SHA256:${digest}`;
 };
+
+/**
+ * The `ssh-rsa` line for an RSA private key, or null for any other key type or a key that cannot be
+ * read (e.g. a wrong passphrase).
+ */
+module.exports.publicKeyFromPrivate = (privateKeyPem, passphrase) => {
+    try {
+        const key = crypto.createPrivateKey({ key: privateKeyPem, ...(passphrase ? { passphrase } : {}) });
+        if (key.asymmetricKeyType !== "rsa") return null;
+        return toOpenSshPublicKey(crypto.createPublicKey(key), "");
+    } catch {
+        return null;
+    }
+};
+
+module.exports.sshField = sshField;

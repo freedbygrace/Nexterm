@@ -7,6 +7,7 @@ module.exports.createIdentityValidation = Joi.object({
     sshKey: Joi.string().optional(),
     passphrase: Joi.string().optional(),
     sshCertificate: Joi.string().optional(),
+    useCertificateAuthority: Joi.boolean().optional(),
     organizationId: Joi.number().integer().optional(),
 });
 
@@ -20,7 +21,8 @@ module.exports.updateIdentityValidation = Joi.object({
     sshCertificate: Joi.string().optional(),
     organizationId: Joi.number().integer().optional(),
     disabled: Joi.boolean().optional(),
-}).or("name", "username", "type", "password", "sshKey", "passphrase", "sshCertificate", "organizationId", "disabled");
+    useCertificateAuthority: Joi.boolean().optional(),
+}).or("name", "username", "type", "password", "sshKey", "passphrase", "sshCertificate", "organizationId", "disabled", "useCertificateAuthority");
 
 module.exports.setIdentityDisabledValidation = Joi.object({
     disabled: Joi.boolean().required(),

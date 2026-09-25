@@ -34,6 +34,14 @@ module.exports = db.define(
             type: Sequelize.STRING,
             allowNull: true,
         },
+        /**
+         * When set, a certificate from this CA (valid for minutes) is signed for every connection, so
+         * hosts that trust the CA accept the identity without its key in authorized_keys.
+         */
+        certificateAuthorityId: {
+            type: Sequelize.INTEGER,
+            allowNull: true,
+        },
         /** A disabled identity stays intact but is refused for every new session. */
         disabled: {
             type: Sequelize.BOOLEAN,

@@ -3,6 +3,7 @@ const { validateSchema } = require("../utils/schema");
 const { listIdentities, createIdentity, deleteIdentity, updateIdentity, moveIdentityToOrganization, setIdentityDisabled } = require("../controllers/identity");
 const { createIdentityValidation, updateIdentityValidation, moveIdentityValidation, setIdentityDisabledValidation } = require("../validations/identity");
 const { createAuditLog, AUDIT_ACTIONS, RESOURCE_TYPES } = require("../controllers/audit");
+const { getCertificateAuthority } = require("../controllers/certificateAuthority");
 
 const app = Router();
 
@@ -17,6 +18,25 @@ const app = Router();
  */
 app.get("/list", async (req, res) => {
     res.json(await listIdentities(req.user.id));
+});
+
+/**
+ * GET /identity/certificate-authority
+ * @summary SSH Certificate Authority
+ * @description The public key of the caller's personal SSH user CA, or an organization's. Hosts that list it in sshd's
+ * `TrustedUserCAKeys` accept identities linked to the CA: Nexterm signs a certificate valid for ten minutes for every
+ * connection. Returns null until the CA is first used; the private key is never returned.
+ * @tags Identity
+ * @produces application/json
+ * @security BearerAuth
+ * @param {number} organizationId.query - The organization whose CA to return instead of the personal one
+ * @return {object} 200 - Public key, fingerprint and creation date, or null
+ */
+app.get("/certificate-authority", async (req, res) => {
+    const organizationId = req.query.organizationId ? Number.parseInt(req.query.organizationId, 10) : null;
+    const result = await getCertificateAuthority(req.user.id, organizationId);
+    if (result?.code) return res.status(result.code).json(result);
+    res.json(result);
 });
 
 /**

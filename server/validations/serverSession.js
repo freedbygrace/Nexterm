@@ -9,6 +9,8 @@ module.exports.createSessionValidation = Joi.object({
     browserId: Joi.string().allow(null).optional(),
     scriptId: Joi.number().allow(null).optional(),
     startPath: Joi.string().allow(null).optional(),
+    /** The terminal session this one serves (the file panel docked beside it); it lives and dies with it. */
+    companionOf: Joi.string().max(100).allow(null).optional(),
     directIdentity: Joi.object({
         username: Joi.string().max(255).optional(),
         type: Joi.string().valid("password", "ssh", "both", "password-only").required(),

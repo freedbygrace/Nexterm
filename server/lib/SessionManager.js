@@ -473,6 +473,14 @@ module.exports.remove = async (sessionId, options = {}) => {
     sessions.delete(sessionId);
     pruneGroupIfEmpty(groupId);
     logger.info("Session removed", { sessionId });
+
+    // Sessions that only existed to serve this one (a terminal's file panel) go with it, wherever it
+    // was closed from.
+    for (const other of [...sessions.values()]) {
+        if (other.configuration?.companionOf === sessionId) {
+            module.exports.remove(other.sessionId, { reason: "Parent session closed" }).catch(() => {});
+        }
+    }
     stateBroadcaster.broadcast("CONNECTIONS", { accountId });
     if (organizationId) stateBroadcaster.broadcast("LIVE_SESSIONS", { organizationId });
     return true;

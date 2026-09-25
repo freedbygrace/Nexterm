@@ -60,10 +60,22 @@ const getRequiredConnectPermission = (protocol, scriptId) => {
  * @param {string|null} type - which protocol to open on the entry ("ssh", "rdp", "sftp", ..., or "web").
  *                             `null` selects the entry's primary protocol. Scripts always run over SSH.
  */
-const createSession = async (accountId, entryId, identityId, connectionReason, type = null, directIdentity = null, tabId = null, browserId = null, scriptId = null, startPath = null, ipAddress = null, userAgent = null) => {
+/**
+ * @param {string|null} companionOf - a session of the caller's on the same entry that this one serves (the
+ *                                    file panel of a terminal): it is left out of session sync, so it never
+ *                                    becomes a tab of its own, and it is closed together with that session.
+ */
+const createSession = async (accountId, entryId, identityId, connectionReason, type = null, directIdentity = null, tabId = null, browserId = null, scriptId = null, startPath = null, ipAddress = null, userAgent = null, companionOf = null) => {
     const entry = await Entry.findByPk(entryId);
     if (!entry) {
         return { code: 404, message: "Entry not found" };
+    }
+
+    if (companionOf) {
+        const parent = SessionManager.get(companionOf);
+        if (!parent || parent.accountId !== accountId || parent.entryId !== entry.id) {
+            return { code: 400, message: "The session to attach to does not exist" };
+        }
     }
 
     const resolved = resolveSessionProtocol(entry, scriptId ? "ssh" : type);
@@ -127,6 +139,7 @@ const createSession = async (accountId, entryId, identityId, connectionReason, t
         scriptId: scriptId || null,
         startPath: startPath || null,
         renderer,
+        companionOf: companionOf || null,
     };
 
     const session = SessionManager.create(accountId, entryId, configuration, connectionReason, tabId, browserId, auditLogId, entry.organizationId);
@@ -160,7 +173,9 @@ const getSessions = async (accountId, tabId = null, browserId = null) => {
     if (sessionSync === 'same_tab') filterTabId = tabId;
     else if (sessionSync === 'same_browser') filterBrowserId = browserId;
 
-    const sessions = SessionManager.getAll(accountId, filterTabId, filterBrowserId);
+    // A companion (a terminal's file panel) is part of its terminal, not a tab to restore.
+    const sessions = SessionManager.getAll(accountId, filterTabId, filterBrowserId)
+        .filter(session => !session.configuration?.companionOf);
     if (!sessions.length) return [];
 
     const entryIds = [...new Set(sessions.map(s => s.entryId))];

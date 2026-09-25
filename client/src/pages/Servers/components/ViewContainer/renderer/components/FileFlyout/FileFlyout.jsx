@@ -51,6 +51,8 @@ export const FileFlyout = ({ session, open, onClose, getStartPath, setOpenFileEd
                     identityId: session.identity,
                     type: "sftp",
                     startPath: getStartPath?.() || undefined,
+                    // Keeps it out of session sync (no tab of its own) and closes it with the terminal.
+                    companionOf: session.id,
                     tabId: getTabId(),
                     browserId: getBrowserId(),
                 });
